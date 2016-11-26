@@ -1,0 +1,6 @@
+[package]
+name = "mdns"
+version = "0.1.0"
+authors = ["Dylan McKay <dylanmckay34@gmail.com>"]
+
+[dependencies]
