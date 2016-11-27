@@ -4,3 +4,6 @@ version = "0.1.0"
 authors = ["Dylan McKay <dylanmckay34@gmail.com>"]
 
 [dependencies]
+mio = "0.6"
+dns-parser = { path = "../dns-parser" }
+net2 = "0.2"
