@@ -3,7 +3,12 @@ name = "mdns"
 version = "0.1.0"
 authors = ["Dylan McKay <dylanmckay34@gmail.com>"]
 
+description = "A multicast DNS client"
+license = "MIT"
+documentation = "https://docs.rs/mdns"
+repository = "https://github.com/dylanmckay/mdns"
+
 [dependencies]
 mio = "0.6"
-dns-parser = { path = "../dns-parser" }
+dns-parser = "0.5"
 net2 = "0.2"
