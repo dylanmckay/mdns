@@ -3,7 +3,6 @@ use {Error, Response};
 use std::collections::VecDeque;
 
 use mio::udp::*;
-use mio;
 use dns;
 use net2;
 
@@ -49,25 +48,8 @@ impl mDNS
         })
     }
 
-    /// Registers the discovery for IO.
-    pub fn register_io(&self,
-                       poll: &mio::Poll,
-                       token: mio::Token) -> Result<(), Error> {
-        poll.register(&self.socket, token, mio::Ready::readable() | mio::Ready::writable(),
-                      mio::PollOpt::edge())?;
-        Ok(())
-    }
-
-    /// Handles an IO event.
-    pub fn handle_io(&mut self, event: mio::Event) -> Result<(), Error> {
-        if event.kind().is_readable() { self.recv()? };
-        if event.kind().is_writable() { self.send()? };
-
-        Ok(())
-    }
-
-    /// Multicasts DNS queries.
-    fn send(&mut self) -> Result<(), Error> {
+    /// Send multicasted DNS queries.
+    pub fn send(&mut self) -> Result<(), Error> {
         let mut builder = dns::Builder::new_query(0, false);
         builder.add_question(&self.service_name,
                              dns::QueryType::PTR,
@@ -80,7 +62,7 @@ impl mDNS
     }
 
     /// Attempts to receive data from the multicast socket.
-    fn recv(&mut self) -> Result<(), Error> {
+    pub fn recv(&mut self) -> Result<(), Error> {
         let mut buffer: [u8; 10000] = [0; 10000];
         let (count, _) = self.socket.recv_from(&mut buffer)?.unwrap();
         let buffer = &buffer[0..count];
@@ -97,4 +79,6 @@ impl mDNS
     pub fn responses(&mut self) -> ::std::collections::vec_deque::Drain<Response> {
         self.responses.drain(..)
     }
+
+    pub fn socket(&self) -> &UdpSocket { &self.socket }
 }
