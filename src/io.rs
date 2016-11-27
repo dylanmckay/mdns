@@ -5,9 +5,9 @@ use mio;
 
 pub struct Io
 {
-    pub token: mio::Token,
     pub poll: mio::Poll,
     pub events: mio::Events,
+    token_accumulator: usize,
 }
 
 impl Io
@@ -17,19 +17,10 @@ impl Io
         let events = mio::Events::with_capacity(1024);
 
         Ok(Io {
-            token: mio::Token(0),
             poll: poll,
             events: events,
+            token_accumulator: 0,
         })
-    }
-
-    pub fn register(&mut self,
-                    mdns: &mDNS) -> Result<(), Error> {
-        self.poll.register(mdns.socket(),
-                           self.token,
-                           mio::Ready::readable() | mio::Ready::writable(),
-                           mio::PollOpt::edge())?;
-        Ok(())
     }
 
     pub fn poll(&mut self,
@@ -39,12 +30,16 @@ impl Io
         self.poll.poll(&mut self.events, timeout)?;
 
         for event in self.events.iter() {
-            assert_eq!(event.token(), self.token);
-
-            if event.kind().is_readable() { mdns.recv()? };
-            if event.kind().is_writable() { mdns.send()? };
+            if event.kind().is_readable() { mdns.recv(event.token())? };
+            if event.kind().is_writable() { mdns.send(event.token())? };
         }
 
         Ok(())
+    }
+
+    pub fn create_token(&mut self) -> mio::Token {
+        let token = mio::Token(self.token_accumulator);
+        self.token_accumulator += 1;
+        token
     }
 }

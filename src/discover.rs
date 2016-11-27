@@ -9,8 +9,7 @@ pub fn discover<F>(service_name: &str,
     where F: FnMut(Response) {
     let mut io = io::Io::new()?;
 
-    let mut mdns = mDNS::new(service_name)?;
-    io.register(&mut mdns)?;
+    let mut mdns = mDNS::new(service_name, &mut io)?;
 
     let finish_at = duration.map(|duration| SystemTime::now() + duration);
 
