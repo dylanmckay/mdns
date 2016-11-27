@@ -3,10 +3,12 @@
 pub use self::mdns::mDNS;
 pub use self::response::{Response, Record, RecordKind};
 pub use self::errors::{Error, ErrorKind};
+pub use self::discover::discover;
 
 pub mod mdns;
 pub mod response;
 pub mod errors;
+pub mod discover;
 mod io;
 
 extern crate mio;

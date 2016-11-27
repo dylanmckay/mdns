@@ -52,6 +52,17 @@ impl Response
             additional: packet.additional.iter().map(Record::from_resource_record).collect(),
         }
     }
+
+    pub fn records(&self) -> ::std::vec::IntoIter<&Record> {
+        let records: Vec<_> = vec![&self.answers, &self.nameservers, &self.additional].into_iter().flat_map(|c| c.iter()).collect();
+        records.into_iter()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.answers.is_empty() &&
+            self.nameservers.is_empty() &&
+            self.additional.is_empty()
+    }
 }
 
 impl Record
