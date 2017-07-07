@@ -1,3 +1,19 @@
+//! Utilities for discovering devices on a network.
+//!
+//! Examples
+//!
+//! ```rust,no_run
+//! const SERVICE_NAME: &'static str = "_googlecast._tcp.local";
+//!
+//! fn main() {
+//!     for response in mdns::discover::all(SERVICE_NAME).unwrap() {
+//!         let response = response.unwrap();
+//!
+//!         println!("{:?}", response);
+//!     }
+//! }
+//! ```
+
 use {mDNS, Error, Response};
 
 use std::collections::VecDeque;
