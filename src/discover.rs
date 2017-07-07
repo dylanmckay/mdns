@@ -3,12 +3,12 @@ use std::time::{SystemTime, Duration};
 
 use io;
 
-pub fn discover<F>(service_name: &str,
-                   duration: Option<Duration>,
-                   mut f: F) -> Result<(), Error>
-    where F: FnMut(Response) {
+/// Runs discovery with a callback that can be notifed of responses.
+pub fn discover_with<F>(service_name: &str,
+                        duration: Option<Duration>,
+                        mut f: F) -> Result<(), Error>
+    where F: FnMut(Response) -> Result<(), Error> {
     let mut io = io::Io::new()?;
-
     let mut mdns = mDNS::new(service_name, &mut io)?;
 
     let finish_at = duration.map(|duration| SystemTime::now() + duration);
@@ -21,7 +21,7 @@ pub fn discover<F>(service_name: &str,
         io.poll(&mut mdns, poll_timeout)?;
 
         for response in mdns.responses() {
-            f(response)
+            f(response)?;
         }
 
         if let Some(finish_at) = finish_at {
