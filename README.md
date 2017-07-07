@@ -17,19 +17,32 @@ Find IP addresses for all Chromecasts on the local network.
 ```rust
 extern crate mdns;
 
-use std::time::Duration;
+use mdns::{Record, RecordKind};
+use std::net::IpAddr;
+
+const SERVICE_NAME: &'static str = "_googlecast._tcp.local";
 
 fn main() {
-    let duration = Duration::from_secs(5);
+    for response in mdns::discover::all(SERVICE_NAME).unwrap() {
+        let response = response.unwrap();
 
-    mdns::discover("_googlecast._tcp.local", Some(duration), |response| {
-        let addresses = response.records().filter_map(|record| {
-            if let mdns::RecordKind::A(addr) = record.kind { Some(addr) } else { None }
-        });
+        let addr = response.records()
+                           .filter_map(self::to_ip_addr)
+                           .next();
 
-        for address in addresses {
-            println!("found Chromecast on {}", address);
+        if let Some(addr) = addr {
+            println!("found cast device at {}", addr);
+        } else {
+            println!("cast device does not advertise address");
         }
-    }).expect("error while performing Chromecast discovery");
+    }
+}
+
+fn to_ip_addr(record: &Record) -> Option<IpAddr> {
+    match record.kind {
+        RecordKind::A(addr) => Some(addr.into()),
+        RecordKind::AAAA(addr) => Some(addr.into()),
+        _ => None,
+    }
 }
 ```
