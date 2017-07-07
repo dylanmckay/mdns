@@ -1,17 +1,11 @@
 extern crate mdns;
 
-use std::time::Duration;
+const SERVICE_NAME: &'static str = "_googlecast._tcp.local";
 
 fn main() {
-    let duration = Duration::from_secs(5);
+    for response in mdns::discover::all(SERVICE_NAME).unwrap() {
+        let response = response.unwrap();
 
-    mdns::discover("_googlecast._tcp.local", Some(duration), |response| {
-        let addresses = response.records().filter_map(|record| {
-            if let mdns::RecordKind::A(addr) = record.kind { Some(addr) } else { None }
-        });
-
-        for address in addresses {
-            println!("found Chromecast on {}", address);
-        }
-    }).expect("error while performing Chromecast discovery");
+        println!("response: {:?}", response);
+    }
 }
