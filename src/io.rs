@@ -30,8 +30,8 @@ impl Io
         self.poll.poll(&mut self.events, timeout)?;
 
         for event in self.events.iter() {
-            if event.kind().is_readable() { mdns.recv(event.token())? };
-            if event.kind().is_writable() { mdns.send(event.token())? };
+            if event.readiness().is_readable() { mdns.recv(event.token())? };
+            if event.readiness().is_writable() { mdns.send(event.token())? };
         }
 
         Ok(())

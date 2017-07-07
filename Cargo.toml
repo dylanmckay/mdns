@@ -1,7 +1,7 @@
 [package]
 name = "mdns"
 version = "0.1.4"
-authors = ["Dylan McKay <dylanmckay34@gmail.com>"]
+authors = ["Dylan McKay <me@dylanmckay.io>"]
 
 description = "A multicast DNS client"
 license = "MIT"
@@ -12,7 +12,7 @@ keywords = ["mdns", "dns", "multicast", "chromecast"]
 
 [dependencies]
 mio = "0.6"
-dns-parser = "0.6"
+dns-parser = "0.7"
 net2 = "0.2"
-error-chain = "0.6"
-ifaces = "0.0.3"
+error-chain = "0.10"
+ifaces = "0.1.0"

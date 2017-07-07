@@ -24,21 +24,22 @@ pub struct Record
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RecordKind
 {
-    CNAME(String),
-    NS(String),
     A(net::Ipv4Addr),
     AAAA(net::Ipv6Addr),
+    CNAME(String),
+    MX {
+        preference: u16,
+        exchange: String,
+    },
+    NS(String),
     SRV {
         priority: u16,
         weight: u16,
         port: u16,
         target: String,
     },
+    TXT(String),
     PTR(String),
-    MX {
-        preference: u16,
-        exchange: String,
-    },
     /// A record kind that hasn't been implemented by this library yet.
     Unimplemented(Vec<u8>),
 }
@@ -83,18 +84,19 @@ impl RecordKind
         use dns::RRData;
 
         match *data {
-            RRData::CNAME(ref name) => RecordKind::CNAME(name.to_string()),
-            RRData::NS(ref name) => RecordKind::NS(name.to_string()),
             RRData::A(ref addr) => RecordKind::A(addr.clone()),
             RRData::AAAA(ref addr) => RecordKind::AAAA(addr.clone()),
-            RRData::SRV { priority, weight, port, ref target } => RecordKind::SRV {
-                priority: priority, weight: weight,
-                port: port, target: target.to_string() },
-            RRData::PTR(ref name) => RecordKind::PTR(name.to_string()),
+            RRData::CNAME(ref name) => RecordKind::CNAME(name.to_string()),
             RRData::MX { preference, ref exchange } => RecordKind::MX {
                 preference: preference,
                 exchange: exchange.to_string(),
             },
+            RRData::NS(ref name) => RecordKind::NS(name.to_string()),
+            RRData::PTR(ref name) => RecordKind::PTR(name.to_string()),
+            RRData::SRV { priority, weight, port, ref target } => RecordKind::SRV {
+                priority: priority, weight: weight,
+                port: port, target: target.to_string() },
+            RRData::TXT(ref txt) => RecordKind::TXT(txt.to_owned()),
             RRData::SOA(..) => unimplemented!(),
             RRData::Unknown(data) => RecordKind::Unimplemented(data.to_owned()),
         }

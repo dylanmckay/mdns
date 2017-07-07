@@ -2,7 +2,7 @@
 
 pub use self::mdns::mDNS;
 pub use self::response::{Response, Record, RecordKind};
-pub use self::errors::{Error, ErrorKind};
+pub use self::errors::{Error, ErrorKind, ResultExt};
 pub use self::discover::discover;
 pub use self::io::Io;
 

@@ -1,10 +1,10 @@
 error_chain! {
     types {
-        Error, ErrorKind;
+        Error, ErrorKind, ResultExt;
     }
 
     foreign_links {
-        ::std::io::Error, Io;
-        ::dns::Error, Dns;
+        Io(::std::io::Error);
+        Dns(::dns::Error);
     }
 }

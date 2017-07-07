@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 use std::net::{SocketAddr, Ipv4Addr};
 use std::net::ToSocketAddrs;
 
-use mio::udp::*;
+use mio::net::UdpSocket;
 use mio;
 use dns;
 use net2;
@@ -117,7 +117,7 @@ impl InterfaceDiscovery
     /// Attempts to receive data from the multicast socket.
     fn recv(&mut self) -> Result<Vec<Response>, Error> {
         let mut buffer: [u8; 10000] = [0; 10000];
-        let (count, _) = self.socket.recv_from(&mut buffer)?.unwrap();
+        let (count, _) = self.socket.recv_from(&mut buffer)?;
         let buffer = &buffer[0..count];
 
         if !buffer.is_empty() {
