@@ -1,14 +1,20 @@
 [package]
 name = "mdns"
-version = "0.2.1"
+version = "0.2.2"
 authors = ["Dylan McKay <me@dylanmckay.io>"]
 
-description = "A multicast DNS client"
+description = """
+A multicast DNS client library.
+
+Supports discovery of any mDNS device on a LAN.
+"""
+
 license = "MIT"
 documentation = "https://docs.rs/mdns"
 repository = "https://github.com/dylanmckay/mdns"
 
-keywords = ["mdns", "dns", "multicast", "chromecast"]
+categories = ["network-programming"]
+keywords = ["mdns", "dns", "multicast", "chromecast", "discovery"]
 
 [dependencies]
 mio = "0.6"
