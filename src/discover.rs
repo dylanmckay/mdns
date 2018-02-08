@@ -1,4 +1,4 @@
-//! Utilities for discovering devices on a network.
+//! Utilities for discovering devices on the LAN.
 //!
 //! Examples
 //!
@@ -21,7 +21,11 @@ use std::time::{SystemTime, Duration};
 
 use io;
 
-/// A mDNS discovery.
+/// A multicast DNS discovery request.
+///
+/// This represents a single lookup of a single service name.
+///
+/// This object can be iterated over to yield the received mDNS responses.
 pub struct Discovery {
     io: io::Io,
     mdns: mDNS,

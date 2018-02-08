@@ -10,7 +10,7 @@ pub struct Response
     pub additional: Vec<Record>,
 }
 
-/// A DNS record.
+/// Any type of DNS record.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Record
 {
@@ -20,7 +20,7 @@ pub struct Record
     pub kind: RecordKind,
 }
 
-/// A DNS record record kind.
+/// A specific DNS record variant.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RecordKind
 {
