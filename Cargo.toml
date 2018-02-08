@@ -1,6 +1,6 @@
 [package]
 name = "mdns"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["Dylan McKay <me@dylanmckay.io>"]
 
 description = "A multicast DNS client"
