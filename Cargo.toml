@@ -18,7 +18,7 @@ keywords = ["mdns", "dns", "multicast", "chromecast", "discovery"]
 
 [dependencies]
 mio = "0.6"
-dns-parser = "0.7"
+dns-parser = "0.8"
 net2 = "0.2"
 error-chain = "0.12"
 ifaces = "0.1.0"

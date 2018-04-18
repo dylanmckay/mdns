@@ -38,7 +38,7 @@ pub enum RecordKind
         port: u16,
         target: String,
     },
-    TXT(String),
+    TXT(Vec<String>),
     PTR(String),
     /// A record kind that hasn't been implemented by this library yet.
     Unimplemented(Vec<u8>),
@@ -80,26 +80,30 @@ impl Record
 
 impl RecordKind
 {
-    fn from_rr_data(data: &dns::RRData) -> Self {
-        use dns::RRData;
+    fn from_rr_data(data: &dns::RData) -> Self {
+        use dns::RData;
 
         match *data {
-            RRData::A(ref addr) => RecordKind::A(addr.clone()),
-            RRData::AAAA(ref addr) => RecordKind::AAAA(addr.clone()),
-            RRData::CNAME(ref name) => RecordKind::CNAME(name.to_string()),
-            RRData::MX { preference, ref exchange } => RecordKind::MX {
+            RData::A(dns::rdata::a::Record(ref addr)) => RecordKind::A(addr.clone()),
+            RData::AAAA(dns::rdata::aaaa::Record(ref addr)) => RecordKind::AAAA(addr.clone()),
+            RData::CNAME(ref name) => RecordKind::CNAME(name.to_string()),
+            RData::MX(dns::rdata::mx::Record{ preference, ref exchange }) => RecordKind::MX {
                 preference,
                 exchange: exchange.to_string(),
             },
-            RRData::NS(ref name) => RecordKind::NS(name.to_string()),
-            RRData::PTR(ref name) => RecordKind::PTR(name.to_string()),
-            RRData::SRV { priority, weight, port, ref target } => RecordKind::SRV {
+            RData::NS(ref name) => RecordKind::NS(name.to_string()),
+            RData::PTR(ref name) => RecordKind::PTR(name.to_string()),
+            RData::SRV(dns::rdata::srv::Record { priority, weight, port, ref target }) => RecordKind::SRV {
                 priority, weight,
                 port, target: target.to_string() },
-            RRData::TXT(ref txt) => RecordKind::TXT(txt.to_owned()),
-            RRData::SOA(..) =>
+            RData::TXT(ref txt) => RecordKind::TXT(txt
+                .iter()
+                .map(|bytes| String::from_utf8_lossy(bytes).into_owned())
+                .collect()
+            ),
+            RData::SOA(..) =>
                 RecordKind::Unimplemented("SOA record handling is not implemented".into()),
-            RRData::Unknown(data) => RecordKind::Unimplemented(data.to_owned()),
+            RData::Unknown(data) => RecordKind::Unimplemented(data.to_owned()),
         }
     }
 }
