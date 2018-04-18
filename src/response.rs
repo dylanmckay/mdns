@@ -38,7 +38,7 @@ pub enum RecordKind
         port: u16,
         target: String,
     },
-    TXT(String),
+    TXT(Vec<String>),
     PTR(String),
     /// A record kind that hasn't been implemented by this library yet.
     Unimplemented(Vec<u8>),
@@ -80,25 +80,29 @@ impl Record
 
 impl RecordKind
 {
-    fn from_rr_data(data: &dns::RRData) -> Self {
-        use dns::RRData;
+    fn from_rr_data(data: &dns::rdata::RData) -> Self {
+        use dns::rdata::RData;
 
         match *data {
-            RRData::A(ref addr) => RecordKind::A(addr.clone()),
-            RRData::AAAA(ref addr) => RecordKind::AAAA(addr.clone()),
-            RRData::CNAME(ref name) => RecordKind::CNAME(name.to_string()),
-            RRData::MX { preference, ref exchange } => RecordKind::MX {
-                preference: preference,
-                exchange: exchange.to_string(),
+            RData::A(ref addr) => RecordKind::A(addr.0.clone()),
+            RData::AAAA(ref addr) => RecordKind::AAAA(addr.0.clone()),
+            RData::CNAME(ref name) => RecordKind::CNAME(name.to_string()),
+            RData::MX(ref mx) => RecordKind::MX {
+                preference: mx.preference,
+                exchange: mx.exchange.to_string(),
             },
-            RRData::NS(ref name) => RecordKind::NS(name.to_string()),
-            RRData::PTR(ref name) => RecordKind::PTR(name.to_string()),
-            RRData::SRV { priority, weight, port, ref target } => RecordKind::SRV {
-                priority: priority, weight: weight,
-                port: port, target: target.to_string() },
-            RRData::TXT(ref txt) => RecordKind::TXT(txt.to_owned()),
-            RRData::SOA(..) => unimplemented!(),
-            RRData::Unknown(data) => RecordKind::Unimplemented(data.to_owned()),
+            RData::NS(ref name) => RecordKind::NS(name.to_string()),
+            RData::PTR(ref name) => RecordKind::PTR(name.to_string()),
+            RData::SRV(ref srv) => RecordKind::SRV {
+                priority: srv.priority, weight: srv.weight,
+                port: srv.port, target: srv.target.to_string() },
+            RData::TXT(ref txt) => RecordKind::TXT(txt
+                .iter()
+                .map(|bytes| String::from_utf8_lossy(bytes).into_owned())
+                .collect()
+            ),
+            RData::SOA(..) => unimplemented!(),
+            RData::Unknown(data) => RecordKind::Unimplemented(data.to_owned()),
         }
     }
 }
