@@ -104,7 +104,9 @@ impl InterfaceDiscovery
     /// Send multicasted DNS queries.
     fn send(&mut self, service_name: &str) -> Result<(), Error> {
         let mut builder = dns::Builder::new_query(0, false);
+        let prefer_unicast = false;
         builder.add_question(service_name,
+                             prefer_unicast,
                              dns::QueryType::PTR,
                              dns::QueryClass::IN);
         let packet_data = builder.build().unwrap();
