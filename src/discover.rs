@@ -76,11 +76,12 @@ impl Discovery {
 
     fn poll(&mut self) -> Result<(), Error> {
         loop {
-            let poll_timeout = self.finish_at.map(|finish_at| {
-                finish_at.duration_since(SystemTime::now()).unwrap()
-            });
+            let poll_timeout = Duration::from_millis(10);
 
-            self.io.poll(&mut self.mdns, poll_timeout)?;
+            self.io.poll(&mut self.mdns, Some(poll_timeout))?;
+            for client_token in self.mdns.client_tokens() {
+                self.mdns.send_if_ready(client_token)?;
+            }
 
             let ignore_empty = self.ignore_empty;
             let responses: Vec<_> =
@@ -96,9 +97,12 @@ impl Discovery {
             // if the timeout hasn't passed.
             if responses.is_empty() && !self.timeout_surpassed() {
                 continue;
-            } else {
-                // We have at least one response, or the timeout has run out.
-                self.responses.extend(responses.into_iter());
+            }
+
+            // We have at least one response, or the timeout has run out.
+            self.responses.extend(responses.into_iter());
+
+            if self.timeout_surpassed() {
                 break;
             }
         }

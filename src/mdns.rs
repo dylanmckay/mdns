@@ -1,9 +1,8 @@
 use {Error, Response, Io};
 
 use std::collections::VecDeque;
-use std::net::{IpAddr, Ipv4Addr};
-use std::net::ToSocketAddrs;
-use std::io;
+use std::net::{IpAddr, Ipv4Addr, ToSocketAddrs};
+use std::{io, time};
 
 use mio::net::UdpSocket;
 use mio;
@@ -18,6 +17,9 @@ use net2::unix::UnixUdpBuilderExt;
 const MULTICAST_ADDR: &'static str = "224.0.0.251";
 const MULTICAST_PORT: u16 = 5353;
 
+/// The minimum amount of time between outgoing DNS requests.
+const MIN_MILLIS_BETWEEN_DNS_REQUESTS: u64 = 1_000;
+
 /// An mDNS discovery.
 #[allow(non_camel_case_types)]
 pub struct mDNS
@@ -29,6 +31,8 @@ pub struct mDNS
     sockets: Vec<InterfaceDiscovery>,
     /// The DNS responses we have obtained so far.
     responses: VecDeque<Response>,
+    /// The request throttler.
+    request_throttle: Throttle,
 }
 
 /// An mDNS discovery on a specific interface.
@@ -36,6 +40,24 @@ struct InterfaceDiscovery
 {
     token: mio::Token,
     socket: UdpSocket,
+}
+
+/// A request throttler, so that we do not saturate the network.
+#[derive(Clone, Debug)]
+enum Throttle {
+    /// No requests have been sent by us yet.
+    NothingSent {
+        /// The minimum interval of time between requests.
+        minimum_interval: time::Duration,
+    },
+    /// Requests are being sent and we are keeping track of timestamps to
+    /// limit the number of requests.
+    Running {
+        /// The minimum interval of time between requests.
+        minimum_interval: time::Duration,
+        /// When the last DNS request was sent by us.
+        last_request_at: time::Instant,
+    },
 }
 
 impl mDNS
@@ -58,6 +80,7 @@ impl mDNS
             service_name: service_name.to_owned(),
             sockets: interfaces,
             responses: VecDeque::new(),
+            request_throttle: Throttle::new(time::Duration::from_millis(MIN_MILLIS_BETWEEN_DNS_REQUESTS)),
         })
     }
 
@@ -67,9 +90,20 @@ impl mDNS
         Ok(())
     }
 
-    pub fn send(&mut self, token: mio::Token) -> Result<(), Error> {
-        let interface = self.sockets.iter_mut().find(|sock| sock.token == token).unwrap();
-        interface.send(&self.service_name)
+    pub fn send_if_ready(&mut self, token: mio::Token) -> Result<(), Error> {
+        if self.request_throttle.is_open() {
+            let interface = self.sockets.iter_mut().find(|sock| sock.token == token).unwrap();
+            interface.send(&self.service_name)?;
+
+            self.request_throttle.mark();
+        }
+
+        Ok(())
+    }
+
+    /// Gets the mio tokens of all clients.
+    pub fn client_tokens(&self) -> Vec<mio::Token> {
+        self.sockets.iter().map(|s| s.token).collect()
     }
 
     /// Consumes all DNS responses received so far.
@@ -146,3 +180,35 @@ impl InterfaceDiscovery {
         Ok(vec![])
     }
 }
+
+impl Throttle {
+    /// Creates a new request throttler.
+    pub fn new(minimum_interval: time::Duration) -> Self {
+        Throttle::NothingSent { minimum_interval }
+    }
+
+    /// Checks if the throttle is open for more requests.
+    pub fn is_open(&self) -> bool {
+        match *self {
+            Throttle::NothingSent { .. }  => true,
+            Throttle::Running { minimum_interval, last_request_at } => last_request_at.elapsed() >= minimum_interval,
+        }
+    }
+
+    /// Marks that another request has been sent and adjusts limits accordingly.
+    pub fn mark(&mut self) {
+        *self = Throttle::Running {
+            minimum_interval: self.minimum_interval(),
+            last_request_at: time::Instant::now(),
+        };
+    }
+
+    /// Gets the minimum interval between requests.
+    pub fn minimum_interval(&self) -> time::Duration {
+        match *self {
+            Throttle::NothingSent { minimum_interval } => minimum_interval,
+            Throttle::Running { minimum_interval, .. } => minimum_interval,
+        }
+    }
+}
+
