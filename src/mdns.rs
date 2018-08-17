@@ -96,8 +96,8 @@ impl InterfaceDiscovery
                          mio::PollOpt::edge())?;
 
         Ok(InterfaceDiscovery {
-            token: token,
-            socket: socket,
+            token,
+            socket,
         })
     }
 
