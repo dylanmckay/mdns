@@ -46,8 +46,8 @@ pub fn all<S>(service_name: S) -> Result<Discovery, Error> where S: AsRef<str> {
     let mdns = mDNS::new(service_name.as_ref(), &mut io)?;
 
     Ok(Discovery {
-        io: io,
-        mdns: mdns,
+        io,
+        mdns,
         responses: VecDeque::new(),
         finish_at: None,
         ignore_empty: true,

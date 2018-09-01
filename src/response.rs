@@ -88,16 +88,17 @@ impl RecordKind
             RRData::AAAA(ref addr) => RecordKind::AAAA(addr.clone()),
             RRData::CNAME(ref name) => RecordKind::CNAME(name.to_string()),
             RRData::MX { preference, ref exchange } => RecordKind::MX {
-                preference: preference,
+                preference,
                 exchange: exchange.to_string(),
             },
             RRData::NS(ref name) => RecordKind::NS(name.to_string()),
             RRData::PTR(ref name) => RecordKind::PTR(name.to_string()),
             RRData::SRV { priority, weight, port, ref target } => RecordKind::SRV {
-                priority: priority, weight: weight,
-                port: port, target: target.to_string() },
+                priority, weight,
+                port, target: target.to_string() },
             RRData::TXT(ref txt) => RecordKind::TXT(txt.to_owned()),
-            RRData::SOA(..) => unimplemented!(),
+            RRData::SOA(..) =>
+                RecordKind::Unimplemented("SOA record handling is not implemented".into()),
             RRData::Unknown(data) => RecordKind::Unimplemented(data.to_owned()),
         }
     }

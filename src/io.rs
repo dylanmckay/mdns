@@ -17,8 +17,8 @@ impl Io
         let events = mio::Events::with_capacity(1024);
 
         Ok(Io {
-            poll: poll,
-            events: events,
+            poll,
+            events,
             token_accumulator: 0,
         })
     }
