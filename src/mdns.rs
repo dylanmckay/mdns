@@ -1,15 +1,17 @@
 use {Error, Response, Io};
 
 use std::collections::VecDeque;
-use std::net::{SocketAddr, Ipv4Addr};
+use std::net::{IpAddr, Ipv4Addr};
 use std::net::ToSocketAddrs;
+use std::io;
 
 use mio::net::UdpSocket;
 use mio;
 use dns;
 use net2;
-use ifaces;
+use get_if_addrs;
 
+#[cfg(target_os = "linux")]
 use net2::unix::UnixUdpBuilderExt;
 
 /// The IP address for the mDNS multicast socket.
@@ -39,9 +41,12 @@ struct InterfaceDiscovery
 impl mDNS
 {
     pub fn new(service_name: &str, io: &mut Io) -> Result<Self, Error> {
-        let interfaces: Result<Vec<_>, _> = ifaces::Interface::get_all().unwrap().into_iter().filter_map(|iface| {
-            if let Some(SocketAddr::V4(socket_addr)) = iface.addr {
-                Some(InterfaceDiscovery::new(socket_addr.ip(), io))
+        let interfaces: Result<Vec<_>, _> = get_if_addrs::get_if_addrs()
+            .unwrap()
+            .into_iter()
+            .filter_map(|addr| {
+                if let IpAddr::V4(socket_addr) = addr.ip() {
+                    Some(InterfaceDiscovery::new(&socket_addr, io))
             } else {
                 None
             }
@@ -73,16 +78,27 @@ impl mDNS
     }
 }
 
-impl InterfaceDiscovery
-{
+impl InterfaceDiscovery {
+    #[cfg(not(target_os = "windows"))]
+    fn create_socket() -> io::Result<std::net::UdpSocket> {
+        net2::UdpBuilder::new_v4()?
+            .reuse_address(true)?
+            .reuse_port(true)?
+            .bind(("0.0.0.0", MULTICAST_PORT))
+    }
+    
+    #[cfg(target_os = "windows")]
+    fn create_socket() -> io::Result<std::net::UdpSocket> {
+        net2::UdpBuilder::new_v4()?
+            .reuse_address(true)?
+            .bind(("0.0.0.0", MULTICAST_PORT))
+    }
+
     /// Creates a new mDNS discovery.
     fn new(interface_addr: &Ipv4Addr, io: &mut Io) -> Result<Self, Error> {
         let multicast_addr = MULTICAST_ADDR.parse().unwrap();
 
-        let socket = net2::UdpBuilder::new_v4()?
-                                  .reuse_address(true)?
-                                  .reuse_port(true)?
-                                  .bind(("0.0.0.0", MULTICAST_PORT))?;
+        let socket = InterfaceDiscovery::create_socket()?;
         let socket = UdpSocket::from_socket(socket)?;
 
         socket.set_multicast_loop_v4(true)?;
