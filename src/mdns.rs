@@ -11,7 +11,7 @@ use dns;
 use net2;
 use get_if_addrs;
 
-#[cfg(target_os = "linux")]
+#[cfg(not(target_os = "windows"))]
 use net2::unix::UnixUdpBuilderExt;
 
 /// The IP address for the mDNS multicast socket.
@@ -86,7 +86,7 @@ impl InterfaceDiscovery {
             .reuse_port(true)?
             .bind(("0.0.0.0", MULTICAST_PORT))
     }
-    
+
     #[cfg(target_os = "windows")]
     fn create_socket() -> io::Result<std::net::UdpSocket> {
         net2::UdpBuilder::new_v4()?
