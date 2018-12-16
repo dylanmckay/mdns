@@ -70,7 +70,7 @@ use self::io::Io;
 extern crate mio;
 extern crate dns_parser as dns;
 extern crate net2;
-extern crate ifaces;
+extern crate get_if_addrs;
 
 #[macro_use]
 extern crate error_chain;
