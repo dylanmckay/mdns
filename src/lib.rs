@@ -54,23 +54,23 @@
 
 #![recursion_limit = "1024"]
 
-pub use self::response::{Response, Record, RecordKind};
 pub use self::errors::{Error, ErrorKind, ResultExt};
+pub use self::response::{Record, RecordKind, Response};
 
 pub mod discover;
 
+mod errors;
 mod mdns;
 mod response;
-mod errors;
-mod io;
 
 use self::mdns::mDNS;
-use self::io::Io;
 
-extern crate mio;
 extern crate dns_parser as dns;
-extern crate net2;
+extern crate futures;
 extern crate get_if_addrs;
+extern crate net2;
+extern crate tokio_timer;
+extern crate tokio_udp;
 
 #[macro_use]
 extern crate error_chain;

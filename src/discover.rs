@@ -16,10 +16,11 @@
 
 use {mDNS, Error, Response};
 
-use std::collections::VecDeque;
-use std::time::{SystemTime, Duration};
+use std::time::{Duration, Instant};
 
-use io;
+use tokio_timer::Interval;
+
+use futures::{try_ready, Async::Ready, Poll, Stream};
 
 /// A multicast DNS discovery request.
 ///
@@ -27,40 +28,30 @@ use io;
 ///
 /// This object can be iterated over to yield the received mDNS responses.
 pub struct Discovery {
-    io: io::Io,
     mdns: mDNS,
 
-    /// The responses we have received but not iterated over yet.
-    responses: VecDeque<Response>,
-
-    /// An optional timeout value which represents when we will stop
-    /// checking for responses.
-    finish_at: Option<SystemTime>,
     /// Whether we should ignore empty responses.
     ignore_empty: bool,
+
+    /// The interval we should send mDNS queries.
+    send_request_interval: Interval,
 }
 
 /// Gets an iterator over all responses for a given service.
-pub fn all<S>(service_name: S) -> Result<Discovery, Error> where S: AsRef<str> {
-    let mut io = io::Io::new()?;
-    let mdns = mDNS::new(service_name.as_ref(), &mut io)?;
+pub fn all<S>(service_name: S, mdns_query_interval: Duration) -> Result<Discovery, Error>
+where
+    S: AsRef<str>,
+{
+    let mdns = mDNS::new(service_name.as_ref())?;
 
     Ok(Discovery {
-        io,
         mdns,
-        responses: VecDeque::new(),
-        finish_at: None,
         ignore_empty: true,
+        send_request_interval: Interval::new(Instant::now(), mdns_query_interval),
     })
 }
 
 impl Discovery {
-    /// Sets a timeout for discovery.
-    pub fn timeout(mut self, duration: Duration) -> Self {
-        self.finish_at = Some(SystemTime::now() + duration);
-        self
-    }
-
     /// Sets whether or not we should ignore empty responses.
     ///
     /// Defaults to `true`.
@@ -68,56 +59,31 @@ impl Discovery {
         self.ignore_empty = ignore;
         self
     }
+}
 
-    /// Checks if the timeout has been surpassed.
-    fn timeout_surpassed(&self) -> bool {
-        self.finish_at.map(|finish_at| SystemTime::now() >= finish_at).unwrap_or(false)
-    }
+impl Stream for Discovery {
+    type Item = Response;
+    type Error = Error;
 
-    fn poll(&mut self) -> Result<(), Error> {
+    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
+        if self
+            .send_request_interval
+            .poll()
+            .map(|r| r.is_ready())
+            .unwrap_or(false)
+        {
+            self.mdns.send_request()?;
+        }
+
         loop {
-            let poll_timeout = self.finish_at.map(|finish_at| {
-                finish_at.duration_since(SystemTime::now()).unwrap()
-            });
+            let resp = match try_ready!(self.mdns.poll()) {
+                Some(response) => response,
+                None => return Ok(Ready(None)),
+            };
 
-            self.io.poll(&mut self.mdns, poll_timeout)?;
-
-            let ignore_empty = self.ignore_empty;
-            let responses: Vec<_> =
-                self.mdns.responses()
-                         .filter(|r| if ignore_empty { !r.is_empty() } else { true })
-                         .collect();
-
-            // We can get writable events which will exit the poll loop before
-            // we even read a response. For our purposes, we want to read
-            // at least one response in this method so long as the timeout hasn't passed.
-            //
-            // That way our callers can be sure that there is at least one response
-            // if the timeout hasn't passed.
-            if responses.is_empty() && !self.timeout_surpassed() {
-                continue;
-            } else {
-                // We have at least one response, or the timeout has run out.
-                self.responses.extend(responses.into_iter());
-                break;
+            if !resp.is_empty() || !self.ignore_empty {
+                return Ok(Ready(Some(resp)));
             }
         }
-
-        Ok(())
     }
 }
-
-impl Iterator for Discovery {
-    type Item = Result<Response, Error>;
-
-    fn next(&mut self) -> Option<Result<Response, Error>> {
-        if self.timeout_surpassed() { return None };
-
-        if let Err(e) = self.poll() {
-            return Some(Err(e));
-        }
-
-        self.responses.pop_front().map(Ok)
-    }
-}
-
