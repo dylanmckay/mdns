@@ -23,7 +23,7 @@ fn main() {
 
                 Ok(())
             })
-            .map_err(|_| ()),
+            .map_err(|e| eprintln!("{:?}", e)),
     );
 }
 

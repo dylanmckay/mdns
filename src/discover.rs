@@ -72,7 +72,7 @@ impl Stream for Discovery {
             .map(|r| r.is_ready())
             .unwrap_or(false)
         {
-            self.mdns.send_request()?;
+            self.mdns.send_request();
         }
 
         loop {

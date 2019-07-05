@@ -32,37 +32,50 @@ pub struct mDNS {
     /// There will be one per socket.
     sockets: Vec<InterfaceDiscovery>,
     next_to_poll: usize,
+    /// When `true`, we update the sockets on the next `send_request`.
+    update_sockets: bool,
 }
 
 impl mDNS {
     pub fn new(service_name: &str) -> Result<Self, Error> {
-        let interfaces: Result<Vec<_>, _> = get_if_addrs::get_if_addrs()
-            .unwrap()
-            .into_iter()
-            .filter_map(|addr| {
-                if let IpAddr::V4(socket_addr) = addr.ip() {
-                    Some(InterfaceDiscovery::new(&socket_addr))
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        let interfaces = interfaces?;
-
         Ok(mDNS {
             service_name: service_name.to_owned(),
-            sockets: interfaces,
+            sockets: Self::get_sockets(),
             next_to_poll: 0,
+            update_sockets: false,
         })
     }
 
     /// Send out a mDNS request using all interfaces.
-    pub fn send_request(&mut self) -> Result<(), Error> {
+    pub fn send_request(&mut self) {
+        if self.sockets.is_empty() || self.update_sockets {
+            self.sockets.clear();
+            self.sockets = Self::get_sockets();
+            self.update_sockets = false;
+        }
+
         let service_name = &self.service_name;
-        self.sockets
-            .iter_mut()
-            .try_for_each(|i| i.send_request(&service_name))
+        self.sockets.iter_mut().for_each(|i| {
+            let _ = i.send_request(&service_name);
+        })
+    }
+
+    /// Get all sockets.
+    fn get_sockets() -> Vec<InterfaceDiscovery> {
+        get_if_addrs::get_if_addrs()
+            .and_then(|if_addrs| {
+                Ok(if_addrs
+                    .into_iter()
+                    .filter_map(|addr| {
+                        if let IpAddr::V4(socket_addr) = addr.ip() {
+                            InterfaceDiscovery::new(&socket_addr).ok()
+                        } else {
+                            None
+                        }
+                    })
+                    .collect())
+            })
+            .unwrap_or_default()
     }
 }
 
@@ -75,9 +88,15 @@ impl Stream for mDNS {
         let mut rounds = 0;
 
         loop {
-            if let Ready(res) = self.sockets[next_to_poll].poll()? {
-                self.next_to_poll = (next_to_poll + 1) % self.sockets.len();
-                return Ok(Ready(res));
+            match self.sockets[next_to_poll].poll() {
+                Ok(Ready(res)) => {
+                    self.next_to_poll = (next_to_poll + 1) % self.sockets.len();
+                    return Ok(Ready(res));
+                }
+                Err(_) => {
+                    self.update_sockets = true;
+                }
+                _ => {}
             }
 
             rounds += 1;
