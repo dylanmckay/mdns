@@ -1,4 +1,3 @@
-use crate::dns;
 use std::net;
 
 /// A DNS response.
@@ -13,7 +12,7 @@ pub struct Response {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Record {
     pub name: String,
-    pub class: dns::Class,
+    pub class: dns_parser::Class,
     pub ttl: u32,
     pub kind: RecordKind,
 }
@@ -42,7 +41,7 @@ pub enum RecordKind {
 }
 
 impl Response {
-    pub fn from_packet(packet: &dns::Packet) -> Self {
+    pub fn from_packet(packet: &dns_parser::Packet) -> Self {
         Response {
             answers: packet
                 .answers
@@ -76,7 +75,7 @@ impl Response {
 }
 
 impl Record {
-    fn from_resource_record(rr: &dns::ResourceRecord) -> Self {
+    fn from_resource_record(rr: &dns_parser::ResourceRecord) -> Self {
         Record {
             name: rr.name.to_string(),
             class: rr.cls,
@@ -87,14 +86,16 @@ impl Record {
 }
 
 impl RecordKind {
-    fn from_rr_data(data: &dns::RData) -> Self {
-        use crate::dns::RData;
+    fn from_rr_data(data: &dns_parser::RData) -> Self {
+        use dns_parser::RData;
 
         match *data {
-            RData::A(dns::rdata::a::Record(ref addr)) => RecordKind::A(addr.clone()),
-            RData::AAAA(dns::rdata::aaaa::Record(ref addr)) => RecordKind::AAAA(addr.clone()),
+            RData::A(dns_parser::rdata::a::Record(ref addr)) => RecordKind::A(addr.clone()),
+            RData::AAAA(dns_parser::rdata::aaaa::Record(ref addr)) => {
+                RecordKind::AAAA(addr.clone())
+            }
             RData::CNAME(ref name) => RecordKind::CNAME(name.to_string()),
-            RData::MX(dns::rdata::mx::Record {
+            RData::MX(dns_parser::rdata::mx::Record {
                 preference,
                 ref exchange,
             }) => RecordKind::MX {
@@ -103,7 +104,7 @@ impl RecordKind {
             },
             RData::NS(ref name) => RecordKind::NS(name.to_string()),
             RData::PTR(ref name) => RecordKind::PTR(name.to_string()),
-            RData::SRV(dns::rdata::srv::Record {
+            RData::SRV(dns_parser::rdata::srv::Record {
                 priority,
                 weight,
                 port,

@@ -17,20 +17,21 @@
 //! This example obtains the IP addresses of the cast devices by looking up `A`/`AAAA` records.
 //!
 //! ```rust,no_run
-//! extern crate mdns;
-//!
-//! use mdns::{Record, RecordKind};
-//! use std::net::IpAddr;
+//! use futures_util::{pin_mut, stream::StreamExt};
+//! use mdns::{Error, Record, RecordKind};
+//! use std::{net::IpAddr, time::Duration};
 //!
 //! /// The hostname of the devices we are searching for.
 //! /// Every Chromecast will respond to the service name in this example.
 //! const SERVICE_NAME: &'static str = "_googlecast._tcp.local";
 //!
-//! fn main() {
-//!     // Iterate through responses from each Cast device.
-//!     for response in mdns::discover::all(SERVICE_NAME).unwrap() {
-//!         let response = response.unwrap();
+//! #[tokio::main]
+//! async fn main() -> Result<(), Error> {
+//!     // Iterate through responses from each Cast device, asking for new devices every 15s
+//!     let stream = mdns::discover::all(SERVICE_NAME, Duration::from_secs(15))?.listen();
+//!     pin_mut!(stream);
 //!
+//!     while let Some(Ok(response)) = stream.next().await {
 //!         let addr = response.records()
 //!                            .filter_map(self::to_ip_addr)
 //!                            .next();
@@ -41,6 +42,8 @@
 //!             println!("cast device does not advertise address");
 //!         }
 //!     }
+//!
+//!     Ok(())
 //! }
 //!
 //! fn to_ip_addr(record: &Record) -> Option<IpAddr> {
@@ -54,7 +57,7 @@
 
 #![recursion_limit = "1024"]
 
-pub use self::errors::{Error, ErrorKind, ResultExt};
+pub use self::errors::Error;
 pub use self::response::{Record, RecordKind, Response};
 
 pub mod discover;
@@ -63,14 +66,4 @@ mod errors;
 mod mdns;
 mod response;
 
-use self::mdns::mDNS;
-
-extern crate dns_parser as dns;
-extern crate futures;
-extern crate get_if_addrs;
-extern crate net2;
-extern crate tokio_timer;
-extern crate tokio_udp;
-
-#[macro_use]
-extern crate error_chain;
+pub use self::mdns::mDNSListener;

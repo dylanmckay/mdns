@@ -1,191 +1,151 @@
 use crate::{Error, Response};
 
-use std::{
-    io,
-    net::{IpAddr, Ipv4Addr, ToSocketAddrs},
-};
+use std::{io, net::Ipv4Addr};
 
-use crate::dns;
-use get_if_addrs;
+use async_stream::try_stream;
+use futures_core::Stream;
+use futures_util::future::join_all;
+use futures_util::stream::select_all;
 use net2;
-use tokio_udp::UdpSocket;
-
-use futures::{
-    try_ready,
-    Async::{NotReady, Ready},
-    Poll, Stream,
+use tokio::net::{
+    udp::{RecvHalf, SendHalf},
+    UdpSocket,
 };
 
 #[cfg(not(target_os = "windows"))]
 use net2::unix::UnixUdpBuilderExt;
+use std::net::SocketAddr;
 
 /// The IP address for the mDNS multicast socket.
-const MULTICAST_ADDR: &'static str = "224.0.0.251";
+const MULTICAST_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
 const MULTICAST_PORT: u16 = 5353;
+
+pub fn mdns_interface(
+    service_name: String,
+    interface_addr: Ipv4Addr,
+) -> Result<(mDNSListener, mDNSSender), Error> {
+    let (listener, sender) = new_interface(interface_addr)?;
+    let listeners = vec![listener];
+    let senders = vec![sender];
+
+    Ok((
+        mDNSListener { sockets: listeners },
+        mDNSSender {
+            service_name,
+            sockets: senders,
+        },
+    ))
+}
 
 /// An mDNS discovery.
 #[allow(non_camel_case_types)]
-pub struct mDNS {
-    /// The name of the service that we are discovering.
+pub struct mDNSListener {
+    sockets: Vec<InterfaceListener>,
+}
+
+impl mDNSListener {
+    pub fn listen(self) -> impl Stream<Item = Result<Response, Error>> {
+        select_all(
+            self.sockets
+                .into_iter()
+                .map(|socket| Box::pin(socket.listen())),
+        )
+    }
+}
+
+#[allow(non_camel_case_types)]
+pub struct mDNSSender {
     service_name: String,
-    /// The UDP sockets that we send/receive multicasts on.
-    /// There will be one per socket.
-    sockets: Vec<InterfaceDiscovery>,
-    next_to_poll: usize,
-    /// When `true`, we update the sockets on the next `send_request`.
-    update_sockets: bool,
+    sockets: Vec<InterfaceSender>,
 }
 
-impl mDNS {
-    pub fn new(service_name: &str) -> Result<Self, Error> {
-        Ok(mDNS {
-            service_name: service_name.to_owned(),
-            sockets: Self::get_sockets(),
-            next_to_poll: 0,
-            update_sockets: false,
-        })
-    }
-
+impl mDNSSender {
     /// Send out a mDNS request using all interfaces.
-    pub fn send_request(&mut self) {
-        if self.sockets.is_empty() || self.update_sockets {
-            self.sockets.clear();
-            self.sockets = Self::get_sockets();
-            self.update_sockets = false;
-        }
-
-        let service_name = &self.service_name;
-        self.sockets.iter_mut().for_each(|i| {
-            let _ = i.send_request(&service_name);
-        })
-    }
-
-    /// Get all sockets.
-    fn get_sockets() -> Vec<InterfaceDiscovery> {
-        get_if_addrs::get_if_addrs()
-            .and_then(|if_addrs| {
-                Ok(if_addrs
-                    .into_iter()
-                    .filter_map(|addr| {
-                        if let IpAddr::V4(socket_addr) = addr.ip() {
-                            InterfaceDiscovery::new(&socket_addr).ok()
-                        } else {
-                            None
-                        }
-                    })
-                    .collect())
-            })
-            .unwrap_or_default()
+    pub async fn send_request(&mut self) {
+        let name = &self.service_name;
+        let sockets = &mut self.sockets;
+        join_all(sockets.iter_mut().map(|socket| socket.send_request(name))).await;
     }
 }
 
-impl Stream for mDNS {
-    type Item = Response;
-    type Error = Error;
+const ADDR_ANY: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
 
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        let mut next_to_poll = self.next_to_poll;
-        let mut rounds = 0;
-
-        loop {
-            match self.sockets[next_to_poll].poll() {
-                Ok(Ready(res)) => {
-                    self.next_to_poll = (next_to_poll + 1) % self.sockets.len();
-                    return Ok(Ready(res));
-                }
-                Err(_) => {
-                    self.update_sockets = true;
-                }
-                _ => {}
-            }
-
-            rounds += 1;
-            if rounds == self.sockets.len() {
-                return Ok(NotReady);
-            }
-
-            next_to_poll = (next_to_poll + 1) % self.sockets.len();
-        }
-    }
+#[cfg(not(target_os = "windows"))]
+fn create_socket() -> io::Result<std::net::UdpSocket> {
+    net2::UdpBuilder::new_v4()?
+        .reuse_address(true)?
+        .reuse_port(true)?
+        .bind((ADDR_ANY, MULTICAST_PORT))
 }
 
-/// An mDNS discovery on a specific interface.
-struct InterfaceDiscovery {
-    socket: UdpSocket,
-    recv_buffer: Vec<u8>,
+#[cfg(target_os = "windows")]
+fn create_socket() -> io::Result<std::net::UdpSocket> {
+    net2::UdpBuilder::new_v4()?
+        .reuse_address(true)?
+        .bind((ADDR_ANY, MULTICAST_PORT))
 }
 
-impl InterfaceDiscovery {
-    #[cfg(not(target_os = "windows"))]
-    fn create_socket() -> io::Result<std::net::UdpSocket> {
-        net2::UdpBuilder::new_v4()?
-            .reuse_address(true)?
-            .reuse_port(true)?
-            .bind(("0.0.0.0", MULTICAST_PORT))
-    }
+/// Creates a new mDNS discovery.
+fn new_interface(interface_addr: Ipv4Addr) -> Result<(InterfaceListener, InterfaceSender), Error> {
+    let socket = create_socket()?;
+    let socket = UdpSocket::from_std(socket)?;
 
-    #[cfg(target_os = "windows")]
-    fn create_socket() -> io::Result<std::net::UdpSocket> {
-        net2::UdpBuilder::new_v4()?
-            .reuse_address(true)?
-            .bind(("0.0.0.0", MULTICAST_PORT))
-    }
+    socket.set_multicast_loop_v4(false)?;
+    socket.join_multicast_v4(MULTICAST_ADDR, interface_addr)?;
 
-    /// Creates a new mDNS discovery.
-    fn new(interface_addr: &Ipv4Addr) -> Result<Self, Error> {
-        let multicast_addr = MULTICAST_ADDR.parse().unwrap();
+    let (recv, send) = socket.split();
 
-        let socket = Self::create_socket()?;
-        let socket = UdpSocket::from_std(socket, &Default::default())?;
+    let recv_buffer = vec![0; 4096];
 
-        socket.set_multicast_loop_v4(true)?;
-        socket.set_multicast_ttl_v4(255)?;
-        socket.join_multicast_v4(&multicast_addr, interface_addr)?;
+    Ok((
+        InterfaceListener { recv, recv_buffer },
+        InterfaceSender { send },
+    ))
+}
 
-        let recv_buffer = vec![0; 4096];
+/// An mDNS sender on a specific interface.
+struct InterfaceSender {
+    send: SendHalf,
+}
 
-        Ok(InterfaceDiscovery {
-            socket,
-            recv_buffer,
-        })
-    }
-
+impl InterfaceSender {
     /// Send multicasted DNS queries.
-    fn send_request(&mut self, service_name: &str) -> Result<(), Error> {
-        let mut builder = dns::Builder::new_query(0, false);
+    async fn send_request(&mut self, service_name: &str) -> Result<(), Error> {
+        let mut builder = dns_parser::Builder::new_query(0, false);
         let prefer_unicast = false;
         builder.add_question(
             service_name,
             prefer_unicast,
-            dns::QueryType::PTR,
-            dns::QueryClass::IN,
+            dns_parser::QueryType::PTR,
+            dns_parser::QueryClass::IN,
         );
         let packet_data = builder.build().unwrap();
 
-        let addr = (MULTICAST_ADDR, MULTICAST_PORT)
-            .to_socket_addrs()
-            .unwrap()
-            .next()
-            .unwrap();
+        let addr = SocketAddr::new(MULTICAST_ADDR.into(), MULTICAST_PORT);
 
-        self.socket
-            .poll_send_to(&packet_data, &addr)
-            .map_err(Into::into)
-            .map(|_| ())
+        self.send.send_to(&packet_data, &addr).await?;
+        Ok(())
     }
 }
 
-impl Stream for InterfaceDiscovery {
-    type Item = Response;
-    type Error = Error;
+/// An mDNS listener on a specific interface.
+struct InterfaceListener {
+    recv: RecvHalf,
+    recv_buffer: Vec<u8>,
+}
 
-    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error> {
-        loop {
-            let (count, _) = try_ready!(self.socket.poll_recv_from(&mut self.recv_buffer));
+impl InterfaceListener {
+    pub fn listen(mut self) -> impl Stream<Item = Result<Response, Error>> {
+        try_stream! {
+            loop {
+                let (count, _) = self.recv.recv_from(&mut self.recv_buffer).await?;
 
-            if count > 0 {
-                let raw_packet = dns::Packet::parse(&self.recv_buffer[..count])?;
-                return Ok(Ready(Some(Response::from_packet(&raw_packet))));
+                if count > 0 {
+                    match dns_parser::Packet::parse(&self.recv_buffer[..count]) {
+                        Ok(raw_packet) => yield Response::from_packet(&raw_packet),
+                        Err(e) => eprintln!("{}, {:?}", e, &self.recv_buffer[..count])
+                    }
+                }
             }
         }
     }
