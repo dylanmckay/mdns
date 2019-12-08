@@ -5,6 +5,6 @@ error_chain! {
 
     foreign_links {
         Io(::std::io::Error);
-        Dns(::dns::Error);
+        Dns(crate::dns::Error);
     }
 }

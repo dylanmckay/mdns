@@ -14,7 +14,7 @@
 //! }
 //! ```
 
-use {mDNS, Error, Response};
+use crate::{mDNS, Error, Response};
 
 use std::time::{Duration, Instant};
 

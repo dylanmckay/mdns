@@ -1,4 +1,4 @@
-use dns;
+use crate::dns;
 use std::net;
 
 /// A DNS response.
@@ -88,7 +88,7 @@ impl Record {
 
 impl RecordKind {
     fn from_rr_data(data: &dns::RData) -> Self {
-        use dns::RData;
+        use crate::dns::RData;
 
         match *data {
             RData::A(dns::rdata::a::Record(ref addr)) => RecordKind::A(addr.clone()),

@@ -1,11 +1,11 @@
-use {Error, Response};
+use crate::{Error, Response};
 
 use std::{
     io,
     net::{IpAddr, Ipv4Addr, ToSocketAddrs},
 };
 
-use dns;
+use crate::dns;
 use get_if_addrs;
 use net2;
 use tokio_udp::UdpSocket;
