@@ -40,6 +40,8 @@ use std::net::Ipv4Addr;
 ///
 /// This object can be iterated over to yield the received mDNS responses.
 pub struct Discovery {
+    service_name: String,
+
     mdns_sender: mDNSSender,
     mdns_listener: mDNSListener,
 
@@ -67,10 +69,11 @@ pub fn interface<S>(
 where
     S: AsRef<str>,
 {
-    let (mdns_listener, mdns_sender) =
-        mdns_interface(service_name.as_ref().to_string(), interface_addr)?;
+    let service_name = service_name.as_ref().to_string();
+    let (mdns_listener, mdns_sender) = mdns_interface(service_name.clone(), interface_addr)?;
 
     Ok(Discovery {
+        service_name,
         mdns_sender,
         mdns_listener,
         ignore_empty: true,
@@ -103,6 +106,7 @@ impl Discovery {
 
     pub fn listen(self) -> impl Stream<Item = Result<Response, Error>> {
         let ignore_empty = self.ignore_empty;
+        let service_name = self.service_name;
         let response_stream = self
             .mdns_listener
             .listen()
@@ -123,7 +127,13 @@ impl Discovery {
             })
             .filter(move |res| {
                 ready(match res {
-                    Ok(response) => !response.is_empty() || !ignore_empty,
+                    Ok(response) => {
+                        (!response.is_empty() || !ignore_empty)
+                            && response
+                                .answers
+                                .iter()
+                                .any(|record| record.name == service_name)
+                    }
                     Err(_) => true,
                 })
             })
