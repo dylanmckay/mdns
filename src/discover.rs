@@ -97,7 +97,7 @@ impl Discovery {
         stream! {
             loop {
                 interval.tick().await;
-                sender.send_request().await;
+                let _ = sender.send_request().await;
 
                 yield;
             }
@@ -107,10 +107,7 @@ impl Discovery {
     pub fn listen(self) -> impl Stream<Item = Result<Response, Error>> {
         let ignore_empty = self.ignore_empty;
         let service_name = self.service_name;
-        let response_stream = self
-            .mdns_listener
-            .listen()
-            .map(|res| StreamResult::Response(res));
+        let response_stream = self.mdns_listener.listen().map(StreamResult::Response);
 
         let interval_stream = Self::interval_send(self.send_request_interval, self.mdns_sender)
             .map(|_| StreamResult::Interval);

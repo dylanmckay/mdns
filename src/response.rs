@@ -90,10 +90,8 @@ impl RecordKind {
         use dns_parser::RData;
 
         match *data {
-            RData::A(dns_parser::rdata::a::Record(ref addr)) => RecordKind::A(addr.clone()),
-            RData::AAAA(dns_parser::rdata::aaaa::Record(ref addr)) => {
-                RecordKind::AAAA(addr.clone())
-            }
+            RData::A(dns_parser::rdata::a::Record(addr)) => RecordKind::A(addr),
+            RData::AAAA(dns_parser::rdata::aaaa::Record(addr)) => RecordKind::AAAA(addr),
             RData::CNAME(ref name) => RecordKind::CNAME(name.to_string()),
             RData::MX(dns_parser::rdata::mx::Record {
                 preference,

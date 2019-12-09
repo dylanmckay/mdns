@@ -4,8 +4,6 @@ use std::{io, net::Ipv4Addr};
 
 use async_stream::try_stream;
 use futures_core::Stream;
-use futures_util::future::join_all;
-use futures_util::stream::select_all;
 use net2;
 use tokio::net::{
     udp::{RecvHalf, SendHalf},
@@ -24,48 +22,20 @@ pub fn mdns_interface(
     service_name: String,
     interface_addr: Ipv4Addr,
 ) -> Result<(mDNSListener, mDNSSender), Error> {
-    let (listener, sender) = new_interface(interface_addr)?;
-    let listeners = vec![listener];
-    let senders = vec![sender];
+    let socket = create_socket()?;
+    let socket = UdpSocket::from_std(socket)?;
+
+    socket.set_multicast_loop_v4(false)?;
+    socket.join_multicast_v4(MULTICAST_ADDR, interface_addr)?;
+
+    let (recv, send) = socket.split();
+
+    let recv_buffer = vec![0; 4096];
 
     Ok((
-        mDNSListener { sockets: listeners },
-        mDNSSender {
-            service_name,
-            sockets: senders,
-        },
+        mDNSListener { recv, recv_buffer },
+        mDNSSender { service_name, send },
     ))
-}
-
-/// An mDNS discovery.
-#[allow(non_camel_case_types)]
-pub struct mDNSListener {
-    sockets: Vec<InterfaceListener>,
-}
-
-impl mDNSListener {
-    pub fn listen(self) -> impl Stream<Item = Result<Response, Error>> {
-        select_all(
-            self.sockets
-                .into_iter()
-                .map(|socket| Box::pin(socket.listen())),
-        )
-    }
-}
-
-#[allow(non_camel_case_types)]
-pub struct mDNSSender {
-    service_name: String,
-    sockets: Vec<InterfaceSender>,
-}
-
-impl mDNSSender {
-    /// Send out a mDNS request using all interfaces.
-    pub async fn send_request(&mut self) {
-        let name = &self.service_name;
-        let sockets = &mut self.sockets;
-        join_all(sockets.iter_mut().map(|socket| socket.send_request(name))).await;
-    }
 }
 
 const ADDR_ANY: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
@@ -85,36 +55,20 @@ fn create_socket() -> io::Result<std::net::UdpSocket> {
         .bind((ADDR_ANY, MULTICAST_PORT))
 }
 
-/// Creates a new mDNS discovery.
-fn new_interface(interface_addr: Ipv4Addr) -> Result<(InterfaceListener, InterfaceSender), Error> {
-    let socket = create_socket()?;
-    let socket = UdpSocket::from_std(socket)?;
-
-    socket.set_multicast_loop_v4(false)?;
-    socket.join_multicast_v4(MULTICAST_ADDR, interface_addr)?;
-
-    let (recv, send) = socket.split();
-
-    let recv_buffer = vec![0; 4096];
-
-    Ok((
-        InterfaceListener { recv, recv_buffer },
-        InterfaceSender { send },
-    ))
-}
-
 /// An mDNS sender on a specific interface.
-struct InterfaceSender {
+#[allow(non_camel_case_types)]
+pub struct mDNSSender {
+    service_name: String,
     send: SendHalf,
 }
 
-impl InterfaceSender {
+impl mDNSSender {
     /// Send multicasted DNS queries.
-    async fn send_request(&mut self, service_name: &str) -> Result<(), Error> {
+    pub async fn send_request(&mut self) -> Result<(), Error> {
         let mut builder = dns_parser::Builder::new_query(0, false);
         let prefer_unicast = false;
         builder.add_question(
-            service_name,
+            &self.service_name,
             prefer_unicast,
             dns_parser::QueryType::PTR,
             dns_parser::QueryClass::IN,
@@ -129,12 +83,13 @@ impl InterfaceSender {
 }
 
 /// An mDNS listener on a specific interface.
-struct InterfaceListener {
+#[allow(non_camel_case_types)]
+pub struct mDNSListener {
     recv: RecvHalf,
     recv_buffer: Vec<u8>,
 }
 
-impl InterfaceListener {
+impl mDNSListener {
     pub fn listen(mut self) -> impl Stream<Item = Result<Response, Error>> {
         try_stream! {
             loop {
