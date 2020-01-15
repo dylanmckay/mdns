@@ -14,12 +14,10 @@
 //! }
 //! ```
 
-use {mDNS, Error, Response};
+use crate::{io, mDNS, Error, Response};
 
 use std::collections::VecDeque;
 use std::time::{SystemTime, Duration};
-
-use io;
 
 const POLL_DURATION_MS: u64 = 10;
 const TIME_BETWEEN_SOLICITATIONS_MS: u64 = 3_000;

@@ -1,4 +1,4 @@
-use {Error, mDNS};
+use crate::{Error, mDNS};
 
 use std::time::Duration;
 use mio;

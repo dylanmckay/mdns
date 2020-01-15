@@ -1,4 +1,4 @@
-use {Error, Response, Io};
+use crate::{Error, Response, Io};
 
 use std::collections::VecDeque;
 use std::net::{IpAddr, Ipv4Addr, ToSocketAddrs};
