@@ -1,148 +1,107 @@
-use {Error, Response, Io};
+use crate::{Error, Response};
 
-use std::collections::VecDeque;
-use std::net::{IpAddr, Ipv4Addr};
-use std::net::ToSocketAddrs;
-use std::io;
+use std::{io, net::Ipv4Addr};
 
-use mio::net::UdpSocket;
-use mio;
-use dns;
+use async_stream::try_stream;
+use futures_core::Stream;
 use net2;
-use get_if_addrs;
+use tokio::net::{
+    udp::{RecvHalf, SendHalf},
+    UdpSocket,
+};
 
 #[cfg(not(target_os = "windows"))]
 use net2::unix::UnixUdpBuilderExt;
+use std::net::SocketAddr;
 
 /// The IP address for the mDNS multicast socket.
-const MULTICAST_ADDR: &'static str = "224.0.0.251";
+const MULTICAST_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
 const MULTICAST_PORT: u16 = 5353;
 
-/// An mDNS discovery.
-#[allow(non_camel_case_types)]
-pub struct mDNS
-{
-    /// The name of the service that we are discovering.
+pub fn mdns_interface(
     service_name: String,
-    /// The UDP sockets that we send/receive multicasts on.
-    /// There will be one per socket.
-    sockets: Vec<InterfaceDiscovery>,
-    /// The DNS responses we have obtained so far.
-    responses: VecDeque<Response>,
+    interface_addr: Ipv4Addr,
+) -> Result<(mDNSListener, mDNSSender), Error> {
+    let socket = create_socket()?;
+    let socket = UdpSocket::from_std(socket)?;
+
+    socket.set_multicast_loop_v4(false)?;
+    socket.join_multicast_v4(MULTICAST_ADDR, interface_addr)?;
+
+    let (recv, send) = socket.split();
+
+    let recv_buffer = vec![0; 4096];
+
+    Ok((
+        mDNSListener { recv, recv_buffer },
+        mDNSSender { service_name, send },
+    ))
 }
 
-/// An mDNS discovery on a specific interface.
-struct InterfaceDiscovery
-{
-    token: mio::Token,
-    socket: UdpSocket,
+const ADDR_ANY: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
+
+#[cfg(not(target_os = "windows"))]
+fn create_socket() -> io::Result<std::net::UdpSocket> {
+    net2::UdpBuilder::new_v4()?
+        .reuse_address(true)?
+        .reuse_port(true)?
+        .bind((ADDR_ANY, MULTICAST_PORT))
 }
 
-impl mDNS
-{
-    pub fn new(service_name: &str, io: &mut Io) -> Result<Self, Error> {
-        let interfaces: Result<Vec<_>, _> = get_if_addrs::get_if_addrs()
-            .unwrap()
-            .into_iter()
-            .filter_map(|addr| {
-                if let IpAddr::V4(socket_addr) = addr.ip() {
-                    Some(InterfaceDiscovery::new(&socket_addr, io))
-            } else {
-                None
-            }
-        }).collect();
-
-        let interfaces = interfaces?;
-
-        Ok(mDNS {
-            service_name: service_name.to_owned(),
-            sockets: interfaces,
-            responses: VecDeque::new(),
-        })
-    }
-
-    pub fn recv(&mut self, token: mio::Token) -> Result<(), Error> {
-        let interface = self.sockets.iter_mut().find(|sock| sock.token == token).unwrap();
-        self.responses.extend(interface.recv()?);
-        Ok(())
-    }
-
-    pub fn send(&mut self, token: mio::Token) -> Result<(), Error> {
-        let interface = self.sockets.iter_mut().find(|sock| sock.token == token).unwrap();
-        interface.send(&self.service_name)
-    }
-
-    /// Consumes all DNS responses received so far.
-    pub fn responses(&mut self) -> ::std::collections::vec_deque::Drain<Response> {
-        self.responses.drain(..)
-    }
+#[cfg(target_os = "windows")]
+fn create_socket() -> io::Result<std::net::UdpSocket> {
+    net2::UdpBuilder::new_v4()?
+        .reuse_address(true)?
+        .bind((ADDR_ANY, MULTICAST_PORT))
 }
 
-impl InterfaceDiscovery {
-    #[cfg(not(target_os = "windows"))]
-    fn create_socket() -> io::Result<std::net::UdpSocket> {
-        net2::UdpBuilder::new_v4()?
-            .reuse_address(true)?
-            .reuse_port(true)?
-            .bind(("0.0.0.0", MULTICAST_PORT))
-    }
+/// An mDNS sender on a specific interface.
+#[allow(non_camel_case_types)]
+pub struct mDNSSender {
+    service_name: String,
+    send: SendHalf,
+}
 
-    #[cfg(target_os = "windows")]
-    fn create_socket() -> io::Result<std::net::UdpSocket> {
-        net2::UdpBuilder::new_v4()?
-            .reuse_address(true)?
-            .bind(("0.0.0.0", MULTICAST_PORT))
-    }
-
-    /// Creates a new mDNS discovery.
-    fn new(interface_addr: &Ipv4Addr, io: &mut Io) -> Result<Self, Error> {
-        let multicast_addr = MULTICAST_ADDR.parse().unwrap();
-
-        let socket = InterfaceDiscovery::create_socket()?;
-        let socket = UdpSocket::from_socket(socket)?;
-
-        socket.set_multicast_loop_v4(true)?;
-        socket.set_multicast_ttl_v4(255)?;
-        socket.join_multicast_v4(&multicast_addr, interface_addr)?;
-
-        let token = io.create_token();
-        io.poll.register(&socket,
-                         token,
-                         mio::Ready::readable() | mio::Ready::writable(),
-                         mio::PollOpt::edge())?;
-
-        Ok(InterfaceDiscovery {
-            token,
-            socket,
-        })
-    }
-
+impl mDNSSender {
     /// Send multicasted DNS queries.
-    fn send(&mut self, service_name: &str) -> Result<(), Error> {
-        let mut builder = dns::Builder::new_query(0, false);
+    pub async fn send_request(&mut self) -> Result<(), Error> {
+        let mut builder = dns_parser::Builder::new_query(0, false);
         let prefer_unicast = false;
-        builder.add_question(service_name,
-                             prefer_unicast,
-                             dns::QueryType::PTR,
-                             dns::QueryClass::IN);
+        builder.add_question(
+            &self.service_name,
+            prefer_unicast,
+            dns_parser::QueryType::PTR,
+            dns_parser::QueryClass::IN,
+        );
         let packet_data = builder.build().unwrap();
 
-        let addr = (MULTICAST_ADDR, MULTICAST_PORT).to_socket_addrs().unwrap().next().unwrap();
-        self.socket.send_to(&packet_data, &addr)?;
+        let addr = SocketAddr::new(MULTICAST_ADDR.into(), MULTICAST_PORT);
+
+        self.send.send_to(&packet_data, &addr).await?;
         Ok(())
     }
+}
 
-    /// Attempts to receive data from the multicast socket.
-    fn recv(&mut self) -> Result<Vec<Response>, Error> {
-        let mut buffer: [u8; 10000] = [0; 10000];
-        let (count, _) = self.socket.recv_from(&mut buffer)?;
-        let buffer = &buffer[0..count];
+/// An mDNS listener on a specific interface.
+#[allow(non_camel_case_types)]
+pub struct mDNSListener {
+    recv: RecvHalf,
+    recv_buffer: Vec<u8>,
+}
 
-        if !buffer.is_empty() {
-            let raw_packet = dns::Packet::parse(&buffer)?;
-            return Ok(vec![Response::from_packet(&raw_packet)]);
+impl mDNSListener {
+    pub fn listen(mut self) -> impl Stream<Item = Result<Response, Error>> {
+        try_stream! {
+            loop {
+                let (count, _) = self.recv.recv_from(&mut self.recv_buffer).await?;
+
+                if count > 0 {
+                    match dns_parser::Packet::parse(&self.recv_buffer[..count]) {
+                        Ok(raw_packet) => yield Response::from_packet(&raw_packet),
+                        Err(e) => eprintln!("{}, {:?}", e, &self.recv_buffer[..count])
+                    }
+                }
+            }
         }
-
-        Ok(vec![])
     }
 }
