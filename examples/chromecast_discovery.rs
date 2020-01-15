@@ -1,12 +1,12 @@
 extern crate mdns;
 
 use mdns::{Record, RecordKind};
-use std::net::IpAddr;
+use std::{net::IpAddr, time::Duration};
 
 const SERVICE_NAME: &'static str = "_googlecast._tcp.local";
 
 fn main() {
-    for response in mdns::discover::all(SERVICE_NAME).unwrap() {
+    for response in mdns::discover::all_timeout(SERVICE_NAME, Duration::from_secs(5)).unwrap() {
         let response = response.unwrap();
 
         let addr = response.records()
