@@ -15,17 +15,20 @@ An multicast DNS client in Rust.
 Find IP addresses for all Chromecasts on the local network.
 
 ```rust
-extern crate mdns;
+use futures_util::{pin_mut, stream::StreamExt};
+use mdns::{Error, Record, RecordKind};
+use std::{net::IpAddr, time::Duration};
 
-use mdns::{Record, RecordKind};
-use std::net::IpAddr;
 
 const SERVICE_NAME: &'static str = "_googlecast._tcp.local";
 
-fn main() {
-    for response in mdns::discover::all(SERVICE_NAME).unwrap() {
-        let response = response.unwrap();
+#[tokio::main]
+async fn main() -> Result<(), Error> {
+    // Iterate through responses from each Cast device, asking for new devices every 15s
+    let stream = mdns::discover::all(SERVICE_NAME, Duration::from_secs(15))?.listen();
+    pin_mut!(stream);
 
+    while let Some(Ok(response)) = stream.next().await {
         let addr = response.records()
                            .filter_map(self::to_ip_addr)
                            .next();
@@ -36,6 +39,8 @@ fn main() {
             println!("cast device does not advertise address");
         }
     }
+
+    Ok(())
 }
 
 fn to_ip_addr(record: &Record) -> Option<IpAddr> {
