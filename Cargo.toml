@@ -27,4 +27,4 @@ async-stream = "0.2.0"
 tokio = { version = "0.2.4", features = ["time", "udp", "stream"] }
 
 [dev-dependencies]
-tokio = { version = "0.2.4", features = ["macros"] }
+tokio = { version = "0.2.4", features = ["macros", "rt-core"] }
