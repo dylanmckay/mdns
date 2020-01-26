@@ -1,6 +1,6 @@
 [package]
 name = "mdns"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["Dylan McKay <me@dylanmckay.io>"]
 edition = "2018"
 
