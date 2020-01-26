@@ -18,8 +18,13 @@ categories = ["network-programming"]
 keywords = ["mdns", "dns", "multicast", "chromecast", "discovery"]
 
 [dependencies]
-mio = "0.6"
-dns-parser = "0.8"
+dns-parser = "0.8.0"
 net2 = "0.2"
-error-chain = "0.12"
-get_if_addrs = "0.5.3"
+err-derive = "0.2.1"
+futures-core = "0.3.1"
+futures-util = "0.3.1"
+async-stream = "0.2.0"
+tokio = { version = "0.2.4", features = ["time", "udp", "stream"] }
+
+[dev-dependencies]
+tokio = { version = "0.2.4", features = ["macros", "rt-core"] }
