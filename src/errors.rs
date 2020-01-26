@@ -1,9 +1,10 @@
-use err_derive::Error;
+error_chain! {
+    types {
+        Error, ErrorKind, ResultExt;
+    }
 
-#[derive(Debug, Error)]
-pub enum Error {
-    #[error(display = "_0")]
-    Io(#[error(source)] std::io::Error),
-    #[error(display = "_0")]
-    Dns(#[error(source)] dns_parser::Error),
+    foreign_links {
+        Io(::std::io::Error);
+        Dns(::dns::Error);
+    }
 }

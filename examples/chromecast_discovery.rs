@@ -1,15 +1,17 @@
-use futures_util::{pin_mut, stream::StreamExt};
-use mdns::{Error, Record, RecordKind};
-use std::{net::IpAddr, time::Duration};
+extern crate mdns;
 
-const SERVICE_NAME: &'static str = "_http._tcp.local";
+use mdns::{Record, RecordKind};
+use std::net::IpAddr;
 
-#[tokio::main]
-async fn main() -> Result<(), Error> {
-    let stream = mdns::discover::all(SERVICE_NAME, Duration::from_secs(15))?.listen();
-    pin_mut!(stream);
-    while let Some(Ok(response)) = stream.next().await {
-        let addr = response.records().filter_map(self::to_ip_addr).next();
+const SERVICE_NAME: &'static str = "_googlecast._tcp.local";
+
+fn main() {
+    for response in mdns::discover::all(SERVICE_NAME).unwrap() {
+        let response = response.unwrap();
+
+        let addr = response.records()
+                           .filter_map(self::to_ip_addr)
+                           .next();
 
         if let Some(addr) = addr {
             println!("found cast device at {}", addr);
@@ -17,7 +19,6 @@ async fn main() -> Result<(), Error> {
             println!("cast device does not advertise address");
         }
     }
-    Ok(())
 }
 
 fn to_ip_addr(record: &Record) -> Option<IpAddr> {
@@ -27,3 +28,4 @@ fn to_ip_addr(record: &Record) -> Option<IpAddr> {
         _ => None,
     }
 }
+
