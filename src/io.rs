@@ -1,4 +1,4 @@
-use {Error, mDNS};
+use crate::{Error, mDNS};
 
 use std::time::Duration;
 use mio;
@@ -31,7 +31,7 @@ impl Io
 
         for event in self.events.iter() {
             if event.readiness().is_readable() { mdns.recv(event.token())? };
-            if event.readiness().is_writable() { mdns.send(event.token())? };
+            if event.readiness().is_writable() { mdns.send_if_ready(event.token())? };
         }
 
         Ok(())
