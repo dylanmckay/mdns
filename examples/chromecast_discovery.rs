@@ -2,7 +2,7 @@ use futures_util::{pin_mut, stream::StreamExt};
 use mdns::{Error, Record, RecordKind};
 use std::{net::IpAddr, time::Duration};
 
-const SERVICE_NAME: &'static str = "_http._tcp.local";
+const SERVICE_NAME: &'static str = "_googlecast._tcp.local";
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
