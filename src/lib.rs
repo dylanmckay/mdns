@@ -61,6 +61,7 @@ pub use self::errors::Error;
 pub use self::response::{Record, RecordKind, Response};
 
 pub mod discover;
+pub mod resolve;
 
 mod errors;
 mod mdns;
