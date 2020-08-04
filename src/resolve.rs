@@ -20,8 +20,7 @@
 //! ```
 
 use crate::{Error, Response};
-use futures_util::pin_mut;
-use futures_util::StreamExt;
+use futures_util::{StreamExt, pin_mut, TryFutureExt};
 use std::time::Duration;
 
 /// Resolve a single device by hostname
@@ -48,10 +47,7 @@ where
         None
     };
 
-    Ok(match tokio::time::timeout(timeout, process).await {
-        Ok(result) => result,
-        Err(_) => None,
-    })
+    async_std::future::timeout(timeout, process).map_err(|e| e.into()).await
 }
 
 /// Resolve multiple devices by hostname
@@ -84,6 +80,8 @@ where
         }
     };
 
-    let _ = tokio::time::timeout(timeout, process).await;
-    Ok(found)
+    match async_std::future::timeout(timeout, process).await {
+        Ok(()) => Ok(found),
+        Err(e) => Err(e.into())
+    }
 }
