@@ -4,11 +4,8 @@ use std::{io, net::Ipv4Addr};
 
 use async_stream::try_stream;
 use futures_core::Stream;
-use net2;
-use tokio::net::{
-    udp::{RecvHalf, SendHalf},
-    UdpSocket,
-};
+use std::sync::Arc;
+use async_std::net::UdpSocket;
 
 #[cfg(not(target_os = "windows"))]
 use net2::unix::UnixUdpBuilderExt;
@@ -23,18 +20,17 @@ pub fn mdns_interface(
     interface_addr: Ipv4Addr,
 ) -> Result<(mDNSListener, mDNSSender), Error> {
     let socket = create_socket()?;
-    let socket = UdpSocket::from_std(socket)?;
 
     socket.set_multicast_loop_v4(false)?;
-    socket.join_multicast_v4(MULTICAST_ADDR, interface_addr)?;
+    socket.join_multicast_v4(&MULTICAST_ADDR, &interface_addr)?;
 
-    let (recv, send) = socket.split();
+    let socket = Arc::new(UdpSocket::from(socket));
 
     let recv_buffer = vec![0; 4096];
 
     Ok((
-        mDNSListener { recv, recv_buffer },
-        mDNSSender { service_name, send },
+        mDNSListener { recv: socket.clone(), recv_buffer },
+        mDNSSender { service_name, send: socket },
     ))
 }
 
@@ -56,10 +52,11 @@ fn create_socket() -> io::Result<std::net::UdpSocket> {
 }
 
 /// An mDNS sender on a specific interface.
+#[derive(Debug, Clone)]
 #[allow(non_camel_case_types)]
-pub struct mDNSSender {
+pub struct mDNSSender<> {
     service_name: String,
-    send: SendHalf,
+    send: Arc<UdpSocket>,
 }
 
 impl mDNSSender {
@@ -77,15 +74,16 @@ impl mDNSSender {
 
         let addr = SocketAddr::new(MULTICAST_ADDR.into(), MULTICAST_PORT);
 
-        self.send.send_to(&packet_data, &addr).await?;
+        self.send.send_to(&packet_data, addr).await?;
         Ok(())
     }
 }
 
 /// An mDNS listener on a specific interface.
+#[derive(Debug, Clone)]
 #[allow(non_camel_case_types)]
 pub struct mDNSListener {
-    recv: RecvHalf,
+    recv: Arc<UdpSocket>,
     recv_buffer: Vec<u8>,
 }
 

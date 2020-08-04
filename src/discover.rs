@@ -26,10 +26,7 @@ use crate::{mDNSListener, Error, Response};
 
 use std::time::Duration;
 
-use tokio::time;
-
 use crate::mdns::{mDNSSender, mdns_interface};
-use async_stream::stream;
 use futures_core::Stream;
 use futures_util::{future::ready, stream::select, StreamExt};
 use std::net::Ipv4Addr;
@@ -49,7 +46,7 @@ pub struct Discovery {
     ignore_empty: bool,
 
     /// The interval we should send mDNS queries.
-    send_request_interval: time::Interval,
+    send_request_interval: Duration,
 }
 
 /// Gets an iterator over all responses for a given service on all interfaces.
@@ -77,7 +74,7 @@ where
         mdns_sender,
         mdns_listener,
         ignore_empty: true,
-        send_request_interval: time::interval(mdns_query_interval),
+        send_request_interval: mdns_query_interval,
     })
 }
 
@@ -90,27 +87,21 @@ impl Discovery {
         self
     }
 
-    fn interval_send(
-        mut interval: time::Interval,
-        mut sender: mDNSSender,
-    ) -> impl Stream<Item = ()> {
-        stream! {
-            loop {
-                interval.tick().await;
-                let _ = sender.send_request().await;
-
-                yield;
-            }
-        }
-    }
-
     pub fn listen(self) -> impl Stream<Item = Result<Response, Error>> {
         let ignore_empty = self.ignore_empty;
         let service_name = self.service_name;
         let response_stream = self.mdns_listener.listen().map(StreamResult::Response);
+        let sender = self.mdns_sender.clone();
 
-        let interval_stream = Self::interval_send(self.send_request_interval, self.mdns_sender)
-            .map(|_| StreamResult::Interval);
+        let interval_stream = async_std::stream::interval(self.send_request_interval)
+            // I don't like the double clone, I can't find a prettier way to do this
+            .map(move |_| {
+                let mut sender = sender.clone();
+                async_std::task::spawn(async move {
+                    let _ = sender.send_request().await;
+                });
+                StreamResult::Interval
+            });
 
         let stream = select(response_stream, interval_stream);
         stream
