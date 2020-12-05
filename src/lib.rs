@@ -25,7 +25,7 @@
 //! /// Every Chromecast will respond to the service name in this example.
 //! const SERVICE_NAME: &'static str = "_googlecast._tcp.local";
 //!
-//! #[tokio::main]
+//! #[async_std::main]
 //! async fn main() -> Result<(), Error> {
 //!     // Iterate through responses from each Cast device, asking for new devices every 15s
 //!     let stream = mdns::discover::all(SERVICE_NAME, Duration::from_secs(15))?.listen();

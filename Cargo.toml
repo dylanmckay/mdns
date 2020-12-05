@@ -24,7 +24,7 @@ err-derive = "0.2.1"
 futures-core = "0.3.1"
 futures-util = "0.3.1"
 async-stream = "0.2.0"
-tokio = { version = "0.2.4", features = ["time", "udp", "stream"] }
+async-std = { version = "1.7.0", features = ["unstable"] }
 
 [dev-dependencies]
-tokio = { version = "0.2.4", features = ["macros", "rt-core"] }
+async-std = { version = "1.7.0", features = ["attributes"] }

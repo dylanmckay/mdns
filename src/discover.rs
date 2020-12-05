@@ -9,7 +9,7 @@
 //!
 //! const SERVICE_NAME: &'static str = "_googlecast._tcp.local";
 //!
-//! #[tokio::main]
+//! #[async_std::main]
 //! async fn main() -> Result<(), Error> {
 //!     let stream = mdns::discover::all(SERVICE_NAME, Duration::from_secs(15))?.listen();
 //!     pin_mut!(stream);
@@ -26,9 +26,8 @@ use crate::{mDNSListener, Error, Response};
 
 use std::time::Duration;
 
-use tokio::time;
-
 use crate::mdns::{mDNSSender, mdns_interface};
+use async_std::stream::Interval;
 use async_stream::stream;
 use futures_core::Stream;
 use futures_util::{future::ready, stream::select, StreamExt};
@@ -49,7 +48,7 @@ pub struct Discovery {
     ignore_empty: bool,
 
     /// The interval we should send mDNS queries.
-    send_request_interval: time::Interval,
+    send_request_interval: Duration,
 }
 
 /// Gets an iterator over all responses for a given service on all interfaces.
@@ -77,7 +76,7 @@ where
         mdns_sender,
         mdns_listener,
         ignore_empty: true,
-        send_request_interval: time::interval(mdns_query_interval),
+        send_request_interval: mdns_query_interval,
     })
 }
 
@@ -90,13 +89,10 @@ impl Discovery {
         self
     }
 
-    fn interval_send(
-        mut interval: time::Interval,
-        mut sender: mDNSSender,
-    ) -> impl Stream<Item = ()> {
+    fn interval_send(mut interval: Interval, mut sender: mDNSSender) -> impl Stream<Item = ()> {
         stream! {
             loop {
-                interval.tick().await;
+                interval.next().await;
                 let _ = sender.send_request().await;
 
                 yield;
@@ -109,17 +105,16 @@ impl Discovery {
         let service_name = self.service_name;
         let response_stream = self.mdns_listener.listen().map(StreamResult::Response);
 
-        let interval_stream = Self::interval_send(self.send_request_interval, self.mdns_sender)
-            .map(|_| StreamResult::Interval);
+        let interval = async_std::stream::interval(self.send_request_interval);
+        let interval_stream =
+            Self::interval_send(interval, self.mdns_sender).map(|_| StreamResult::Interval);
 
         let stream = select(response_stream, interval_stream);
         stream
-            .filter_map(|stream_result| {
-                async {
-                    match stream_result {
-                        StreamResult::Interval => None,
-                        StreamResult::Response(res) => Some(res),
-                    }
+            .filter_map(|stream_result| async {
+                match stream_result {
+                    StreamResult::Interval => None,
+                    StreamResult::Response(res) => Some(res),
                 }
             })
             .filter(move |res| {
