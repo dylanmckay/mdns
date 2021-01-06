@@ -5,14 +5,12 @@ use std::{io, net::Ipv4Addr};
 use async_stream::try_stream;
 use futures_core::Stream;
 use net2;
-use tokio::net::{
-    udp::{RecvHalf, SendHalf},
-    UdpSocket,
-};
+use tokio::net::UdpSocket;
 
 #[cfg(not(target_os = "windows"))]
 use net2::unix::UnixUdpBuilderExt;
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 /// The IP address for the mDNS multicast socket.
 const MULTICAST_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
@@ -28,7 +26,8 @@ pub fn mdns_interface(
     socket.set_multicast_loop_v4(false)?;
     socket.join_multicast_v4(MULTICAST_ADDR, interface_addr)?;
 
-    let (recv, send) = socket.split();
+    let recv = Arc::new(socket);
+    let send = recv.clone();
 
     let recv_buffer = vec![0; 4096];
 
@@ -59,7 +58,7 @@ fn create_socket() -> io::Result<std::net::UdpSocket> {
 #[allow(non_camel_case_types)]
 pub struct mDNSSender {
     service_name: String,
-    send: SendHalf,
+    send: Arc<UdpSocket>,
 }
 
 impl mDNSSender {
@@ -85,7 +84,7 @@ impl mDNSSender {
 /// An mDNS listener on a specific interface.
 #[allow(non_camel_case_types)]
 pub struct mDNSListener {
-    recv: RecvHalf,
+    recv: Arc<UdpSocket>,
     recv_buffer: Vec<u8>,
 }
 
