@@ -6,4 +6,6 @@ pub enum Error {
     Io(#[error(source)] std::io::Error),
     #[error(display = "_0")]
     Dns(#[error(source)] dns_parser::Error),
+    #[error(display = "_0")]
+    TimeoutError(#[error(source)] async_std::future::TimeoutError),
 }

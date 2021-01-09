@@ -4,7 +4,7 @@ use std::time::Duration;
 const SERVICE_NAME: &'static str = "_http._tcp.local";
 const HOSTS: [&'static str; 2] = ["server1._http._tcp.local", "server2._http._tcp.local"];
 
-#[tokio::main]
+#[async_std::main]
 async fn main() -> Result<(), Error> {
     let responses = mdns::resolve::multiple(SERVICE_NAME, &HOSTS, Duration::from_secs(15)).await?;
 
