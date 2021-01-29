@@ -97,7 +97,7 @@ impl mDNSListener {
                 if count > 0 {
                     match dns_parser::Packet::parse(&self.recv_buffer[..count]) {
                         Ok(raw_packet) => yield Response::from_packet(&raw_packet),
-                        Err(e) => log::error!("{}, {:?}", e, &self.recv_buffer[..count]),
+                        Err(e) => log::warn!("{}, {:?}", e, &self.recv_buffer[..count]),
                     }
                 }
             }
