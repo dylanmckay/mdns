@@ -9,7 +9,7 @@
 //! const SERVICE_NAME: &'static str = "_googlecast._tcp.local";
 //! const HOST: &'static str = "mycast._googlecast._tcp.local";
 //!
-//! #[tokio::main]
+//! #[async_std::main]
 //! async fn main() -> Result<(), Error> {
 //!     if let Some(response) = mdns::resolve::one(SERVICE_NAME, HOST, Duration::from_secs(15)).await? {
 //!         println!("{:?}", response);

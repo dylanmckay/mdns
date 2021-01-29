@@ -4,7 +4,7 @@ use std::time::Duration;
 
 const SERVICE_NAME: &'static str = "_http._tcp.local";
 
-#[tokio::main]
+#[async_std::main]
 async fn main() -> Result<(), Error> {
     let stream = mdns::discover::all(SERVICE_NAME, Duration::from_secs(15))?.listen();
     pin_mut!(stream);
