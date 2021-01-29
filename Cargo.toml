@@ -1,6 +1,6 @@
 [package]
 name = "mdns"
-version = "1.2.0"
+version = "2.0.2"
 authors = ["Dylan McKay <me@dylanmckay.io>"]
 edition = "2018"
 
@@ -23,5 +23,6 @@ net2 = "0.2"
 err-derive = "0.2.1"
 futures-core = "0.3.1"
 futures-util = "0.3.1"
+log = "0.4"
 async-stream = "0.2.0"
 async-std = { version = "1.6.2", features = ["unstable"] }
