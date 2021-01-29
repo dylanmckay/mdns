@@ -8,6 +8,8 @@
 
 An multicast DNS client in Rust.
 
+Error logging is handled with the `log` library.
+
 [Wikipedia](https://en.wikipedia.org/wiki/Multicast_DNS)
 
 ## Example
