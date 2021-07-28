@@ -92,6 +92,7 @@ impl Discovery {
         let service_name = self.service_name;
         let response_stream = self.mdns_listener.listen().map(StreamResult::Response);
         let sender = self.mdns_sender.clone();
+        let mut imm_sender = sender.clone();
 
         let interval_stream = async_std::stream::interval(self.send_request_interval)
             // I don't like the double clone, I can't find a prettier way to do this
@@ -102,6 +103,11 @@ impl Discovery {
                 });
                 StreamResult::Interval
             });
+
+        // Send first request immediately
+        async_std::task::spawn(async move {
+            let _ = imm_sender.send_request().await;
+        });
 
         let stream = select(response_stream, interval_stream);
         stream
