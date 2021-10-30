@@ -7,6 +7,8 @@ use futures_core::Stream;
 use std::sync::Arc;
 use async_std::net::UdpSocket;
 
+use net2::UdpSocketExt;
+
 #[cfg(not(target_os = "windows"))]
 use net2::unix::UnixUdpBuilderExt;
 use std::net::SocketAddr;
@@ -23,6 +25,7 @@ pub fn mdns_interface(
 
     socket.set_multicast_loop_v4(false)?;
     socket.join_multicast_v4(&MULTICAST_ADDR, &interface_addr)?;
+    socket.set_multicast_if_v4(&interface_addr)?;
 
     let socket = Arc::new(UdpSocket::from(socket));
 
