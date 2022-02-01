@@ -20,8 +20,9 @@ keywords = ["mdns", "dns", "multicast", "chromecast", "discovery"]
 
 [features]
 default = ["runtime-async-std"]
+# runtime-async-std = []
 runtime-async-std = ["async-std"]
-runtime-tokio = []
+runtime-tokio = ["tokio"]
 
 [dependencies]
 dns-parser = "0.8.0"

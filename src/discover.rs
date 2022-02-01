@@ -9,7 +9,8 @@
 //!
 //! const SERVICE_NAME: &'static str = "_googlecast._tcp.local";
 //!
-//! #[async_std::main]
+//! #[cfg_attr(feature = "runtime-async-std", async_std::main)]
+//! #[cfg_attr(feature = "runtime-tokio", tokio::main)]
 //! async fn main() -> Result<(), Error> {
 //!     let stream = mdns::discover::all(SERVICE_NAME, Duration::from_secs(15))?.listen();
 //!     pin_mut!(stream);
@@ -28,7 +29,6 @@ use std::time::Duration;
 
 use crate::mdns::{mDNSSender, mdns_interface};
 use futures_core::Stream;
-use futures_util::{future::ready, stream::select, StreamExt};
 use std::net::Ipv4Addr;
 
 /// A multicast DNS discovery request.
@@ -90,45 +90,15 @@ impl Discovery {
     pub fn listen(self) -> impl Stream<Item = Result<Response, Error>> {
         let ignore_empty = self.ignore_empty;
         let service_name = self.service_name;
-        let response_stream = self.mdns_listener.listen().map(StreamResult::Response);
+        let response_stream = self.mdns_listener.listen();
         let sender = self.mdns_sender.clone();
 
-        let interval_stream = async_std::stream::interval(self.send_request_interval)
-            // I don't like the double clone, I can't find a prettier way to do this
-            .map(move |_| {
-                let mut sender = sender.clone();
-                async_std::task::spawn(async move {
-                    let _ = sender.send_request().await;
-                });
-                StreamResult::Interval
-            });
-
-        let stream = select(response_stream, interval_stream);
-        stream
-            .filter_map(|stream_result| {
-                async {
-                    match stream_result {
-                        StreamResult::Interval => None,
-                        StreamResult::Response(res) => Some(res),
-                    }
-                }
-            })
-            .filter(move |res| {
-                ready(match res {
-                    Ok(response) => {
-                        (!response.is_empty() || !ignore_empty)
-                            && response
-                                .answers
-                                .iter()
-                                .any(|record| record.name == service_name)
-                    }
-                    Err(_) => true,
-                })
-            })
+        crate::runtime::discovery_listen(
+            ignore_empty,
+            service_name,
+            response_stream,
+            sender,
+            self.send_request_interval,
+        )
     }
-}
-
-enum StreamResult {
-    Interval,
-    Response(Result<Response, Error>),
 }
