@@ -2,7 +2,7 @@ use futures_util::{pin_mut, stream::StreamExt};
 use mdns::Error;
 use std::time::Duration;
 
-const SERVICE_NAME: &'static str = "_http._tcp.local";
+const SERVICE_NAME: &str = "_http._tcp.local";
 
 #[async_std::main]
 async fn main() -> Result<(), Error> {

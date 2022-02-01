@@ -57,6 +57,9 @@
 
 #![recursion_limit = "1024"]
 
+#[cfg(all(feature = "runtime-async-std", feature = "runtime-tokio"))]
+compile_error!("\"runtime-async-std\" and \"runtime-tokio\" cannot be enabled simultaneously");
+
 pub use self::errors::Error;
 pub use self::response::{Record, RecordKind, Response};
 

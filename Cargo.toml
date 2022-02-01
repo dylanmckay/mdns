@@ -1,8 +1,9 @@
 [package]
+rust-version = "1.58.1"
 name = "mdns"
 version = "3.0.0"
 authors = ["Dylan McKay <me@dylanmckay.io>"]
-edition = "2018"
+edition = "2021"
 
 description = """
 A multicast DNS client library.
@@ -17,6 +18,11 @@ repository = "https://github.com/dylanmckay/mdns"
 categories = ["network-programming"]
 keywords = ["mdns", "dns", "multicast", "chromecast", "discovery"]
 
+[features]
+default = ["runtime-async-std"]
+runtime-async-std = ["async-std"]
+runtime-tokio = []
+
 [dependencies]
 dns-parser = "0.8.0"
 net2 = "0.2"
@@ -25,4 +31,7 @@ futures-core = "0.3.1"
 futures-util = "0.3.1"
 log = "0.4"
 async-stream = "0.2.0"
-async-std = { version = "1.6.2", features = ["unstable", "attributes"] }
+async-std = { optional = true, version = "1.6.2", features = ["unstable", "attributes"] }
+tokio = {optional = true, version = "1.8", features = ["time", "net", "rt-multi-thread", "macros"]}
+tokio-stream = {optional = true, version = "0.1.8", features = ["time"]}
+
