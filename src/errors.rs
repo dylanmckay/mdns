@@ -1,10 +1,10 @@
 use err_derive::Error;
 
 #[cfg(feature = "runtime-async-std")]
-use async_std::future::TimeoutError;
+pub use async_std::future::TimeoutError;
 
 #[cfg(feature = "runtime-tokio")]
-use tokio::time::error::Elapsed as TimeoutError;
+pub use tokio::time::error::Elapsed as TimeoutError;
 
 #[derive(Debug, Error)]
 pub enum Error {

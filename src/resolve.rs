@@ -48,7 +48,7 @@ where
         None
     };
 
-    runtime::timeout(process, timeout)
+    runtime::timeout(timeout, process)
         .map_err(|e| e.into())
         .await
 }
@@ -83,7 +83,7 @@ where
         }
     };
 
-    match runtime::timeout(process, timeout).await {
+    match runtime::timeout(timeout, process).await {
         Ok(()) => Ok(found),
         Err(e) => Err(e.into()),
     }

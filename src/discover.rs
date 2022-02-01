@@ -29,6 +29,7 @@ use std::time::Duration;
 
 use crate::mdns::{mDNSSender, mdns_interface};
 use futures_core::Stream;
+use futures_util::{future::ready, stream::select, StreamExt};
 use std::net::Ipv4Addr;
 
 /// A multicast DNS discovery request.
@@ -93,12 +94,40 @@ impl Discovery {
         let response_stream = self.mdns_listener.listen();
         let sender = self.mdns_sender.clone();
 
-        crate::runtime::discovery_listen(
-            ignore_empty,
-            service_name,
-            response_stream,
-            sender,
-            self.send_request_interval,
-        )
+        let response_stream = response_stream.map(StreamResult::Response);
+        let interval_stream = crate::runtime::create_interval_stream(self.send_request_interval)
+            .map(move |_| {
+                let mut sender = sender.clone();
+                crate::runtime::spawn(async move {
+                    let _ = sender.send_request().await;
+                });
+                StreamResult::Interval
+            });
+
+        let stream = select(response_stream, interval_stream);
+        stream
+            .filter_map(|stream_result| async {
+                match stream_result {
+                    StreamResult::Interval => None,
+                    StreamResult::Response(res) => Some(res),
+                }
+            })
+            .filter(move |res| {
+                ready(match res {
+                    Ok(response) => {
+                        (!response.is_empty() || !ignore_empty)
+                            && response
+                                .answers
+                                .iter()
+                                .any(|record| record.name == service_name)
+                    }
+                    Err(_) => true,
+                })
+            })
     }
+}
+
+pub enum StreamResult {
+    Interval,
+    Response(Result<crate::Response, crate::Error>),
 }

@@ -21,6 +21,7 @@ pub fn mdns_interface(
     let socket = create_socket()?;
 
     socket.set_multicast_loop_v4(false)?;
+    socket.set_nonblocking(true)?; // explicitly set nonblocking for wider compatability
     socket.join_multicast_v4(&MULTICAST_ADDR, &interface_addr)?;
 
     let socket = crate::runtime::make_async_socket(socket)?;

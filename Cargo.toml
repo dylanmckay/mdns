@@ -1,7 +1,7 @@
 [package]
 rust-version = "1.58.1"
 name = "mdns"
-version = "3.0.0"
+version = "4.0.0"
 authors = ["Dylan McKay <me@dylanmckay.io>"]
 edition = "2021"
 
@@ -20,9 +20,8 @@ keywords = ["mdns", "dns", "multicast", "chromecast", "discovery"]
 
 [features]
 default = ["runtime-async-std"]
-# runtime-async-std = []
 runtime-async-std = ["async-std"]
-runtime-tokio = ["tokio"]
+runtime-tokio = ["tokio", "tokio-stream"]
 
 [dependencies]
 dns-parser = "0.8.0"
