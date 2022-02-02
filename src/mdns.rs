@@ -1,11 +1,10 @@
-use crate::{Error, Response};
+use crate::{runtime::AsyncUdpSocket, Error, Response};
 
 use std::{io, net::Ipv4Addr};
 
 use async_stream::try_stream;
 use futures_core::Stream;
 use std::sync::Arc;
-use async_std::net::UdpSocket;
 
 #[cfg(not(target_os = "windows"))]
 use net2::unix::UnixUdpBuilderExt;
@@ -22,15 +21,22 @@ pub fn mdns_interface(
     let socket = create_socket()?;
 
     socket.set_multicast_loop_v4(false)?;
+    socket.set_nonblocking(true)?; // explicitly set nonblocking for wider compatability
     socket.join_multicast_v4(&MULTICAST_ADDR, &interface_addr)?;
 
-    let socket = Arc::new(UdpSocket::from(socket));
+    let socket = crate::runtime::make_async_socket(socket)?;
 
     let recv_buffer = vec![0; 4096];
 
     Ok((
-        mDNSListener { recv: socket.clone(), recv_buffer },
-        mDNSSender { service_name, send: socket },
+        mDNSListener {
+            recv: socket.clone(),
+            recv_buffer,
+        },
+        mDNSSender {
+            service_name,
+            send: socket,
+        },
     ))
 }
 
@@ -54,9 +60,9 @@ fn create_socket() -> io::Result<std::net::UdpSocket> {
 /// An mDNS sender on a specific interface.
 #[derive(Debug, Clone)]
 #[allow(non_camel_case_types)]
-pub struct mDNSSender<> {
+pub struct mDNSSender {
     service_name: String,
-    send: Arc<UdpSocket>,
+    send: Arc<AsyncUdpSocket>,
 }
 
 impl mDNSSender {
@@ -83,8 +89,8 @@ impl mDNSSender {
 #[derive(Debug, Clone)]
 #[allow(non_camel_case_types)]
 pub struct mDNSListener {
-    recv: Arc<UdpSocket>,
-    recv_buffer: Vec<u8>,
+    pub(crate) recv: Arc<AsyncUdpSocket>,
+    pub(crate) recv_buffer: Vec<u8>,
 }
 
 impl mDNSListener {

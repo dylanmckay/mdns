@@ -2,9 +2,9 @@ use futures_util::{pin_mut, stream::StreamExt};
 use mdns::Error;
 use std::time::Duration;
 
-const SERVICE_NAME: &'static str = "_googlecast._tcp.local";
-
-#[async_std::main]
+const SERVICE_NAME: &str = "_googlecast._tcp.local";
+#[cfg_attr(feature = "runtime-async-std", async_std::main)]
+#[cfg_attr(feature = "runtime-tokio", tokio::main)]
 async fn main() -> Result<(), Error> {
     let stream = mdns::discover::all(SERVICE_NAME, Duration::from_secs(15))?.listen();
     pin_mut!(stream);

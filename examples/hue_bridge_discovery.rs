@@ -2,7 +2,7 @@ use futures_util::{pin_mut, stream::StreamExt};
 use mdns::Error;
 use std::time::Duration;
 
-const SERVICE_NAME: &str = "_http._tcp.local";
+const SERVICE_NAME: &str = "_hue._tcp.local";
 
 #[cfg_attr(feature = "runtime-async-std", async_std::main)]
 #[cfg_attr(feature = "runtime-tokio", tokio::main)]
@@ -13,7 +13,7 @@ async fn main() -> Result<(), Error> {
         let addr = response.ip_addr();
 
         if let Some(addr) = addr {
-            println!("found cast device at {}", addr);
+            println!("found Hue bridge at {}", addr);
         } else {
             println!("cast device does not advertise address");
         }

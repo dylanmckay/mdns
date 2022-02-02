@@ -9,7 +9,8 @@
 //!
 //! const SERVICE_NAME: &'static str = "_googlecast._tcp.local";
 //!
-//! #[async_std::main]
+//! #[cfg_attr(feature = "runtime-async-std", async_std::main)]
+//! #[cfg_attr(feature = "runtime-tokio", tokio::main)]
 //! async fn main() -> Result<(), Error> {
 //!     let stream = mdns::discover::all(SERVICE_NAME, Duration::from_secs(15))?.listen();
 //!     pin_mut!(stream);
@@ -90,14 +91,14 @@ impl Discovery {
     pub fn listen(self) -> impl Stream<Item = Result<Response, Error>> {
         let ignore_empty = self.ignore_empty;
         let service_name = self.service_name;
-        let response_stream = self.mdns_listener.listen().map(StreamResult::Response);
+        let response_stream = self.mdns_listener.listen();
         let sender = self.mdns_sender.clone();
 
-        let interval_stream = async_std::stream::interval(self.send_request_interval)
-            // I don't like the double clone, I can't find a prettier way to do this
+        let response_stream = response_stream.map(StreamResult::Response);
+        let interval_stream = crate::runtime::create_interval_stream(self.send_request_interval)
             .map(move |_| {
                 let mut sender = sender.clone();
-                async_std::task::spawn(async move {
+                crate::runtime::spawn(async move {
                     let _ = sender.send_request().await;
                 });
                 StreamResult::Interval
@@ -105,12 +106,10 @@ impl Discovery {
 
         let stream = select(response_stream, interval_stream);
         stream
-            .filter_map(|stream_result| {
-                async {
-                    match stream_result {
-                        StreamResult::Interval => None,
-                        StreamResult::Response(res) => Some(res),
-                    }
+            .filter_map(|stream_result| async {
+                match stream_result {
+                    StreamResult::Interval => None,
+                    StreamResult::Response(res) => Some(res),
                 }
             })
             .filter(move |res| {
@@ -128,7 +127,7 @@ impl Discovery {
     }
 }
 
-enum StreamResult {
+pub enum StreamResult {
     Interval,
-    Response(Result<Response, Error>),
+    Response(Result<crate::Response, crate::Error>),
 }

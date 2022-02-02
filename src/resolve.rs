@@ -9,7 +9,8 @@
 //! const SERVICE_NAME: &'static str = "_googlecast._tcp.local";
 //! const HOST: &'static str = "mycast._googlecast._tcp.local";
 //!
-//! #[async_std::main]
+//! #[cfg_attr(feature = "runtime-async-std", async_std::main)]
+//! #[cfg_attr(feature = "runtime-tokio", tokio::main)]
 //! async fn main() -> Result<(), Error> {
 //!     if let Some(response) = mdns::resolve::one(SERVICE_NAME, HOST, Duration::from_secs(15)).await? {
 //!         println!("{:?}", response);
@@ -19,8 +20,8 @@
 //! }
 //! ```
 
-use crate::{Error, Response};
-use futures_util::{StreamExt, pin_mut, TryFutureExt};
+use crate::{runtime, Error, Response};
+use futures_util::{pin_mut, StreamExt, TryFutureExt};
 use std::time::Duration;
 
 /// Resolve a single device by hostname
@@ -47,7 +48,9 @@ where
         None
     };
 
-    async_std::future::timeout(timeout, process).map_err(|e| e.into()).await
+    runtime::timeout(timeout, process)
+        .map_err(|e| e.into())
+        .await
 }
 
 /// Resolve multiple devices by hostname
@@ -80,8 +83,8 @@ where
         }
     };
 
-    match async_std::future::timeout(timeout, process).await {
+    match runtime::timeout(timeout, process).await {
         Ok(()) => Ok(found),
-        Err(e) => Err(e.into())
+        Err(e) => Err(e.into()),
     }
 }

@@ -25,7 +25,8 @@
 //! /// Every Chromecast will respond to the service name in this example.
 //! const SERVICE_NAME: &'static str = "_googlecast._tcp.local";
 //!
-//! #[async_std::main]
+//! #[cfg_attr(feature = "runtime-async-std", async_std::main)]
+//! #[cfg_attr(feature = "runtime-tokio", tokio::main)]
 //! async fn main() -> Result<(), Error> {
 //!     // Iterate through responses from each Cast device, asking for new devices every 15s
 //!     let stream = mdns::discover::all(SERVICE_NAME, Duration::from_secs(15))?.listen();
@@ -57,11 +58,19 @@
 
 #![recursion_limit = "1024"]
 
+#[cfg(all(feature = "runtime-async-std", feature = "runtime-tokio"))]
+compile_error!("\"runtime-async-std\" and \"runtime-tokio\" cannot be enabled simultaneously");
+
+#[cfg(not(any(feature = "runtime-async-std", feature = "runtime-tokio")))]
+compile_error!("At least one runtime (\"runtime-async-std\" or \"runtime-tokio\") cargo feature must be enabled");
+
 pub use self::errors::Error;
 pub use self::response::{Record, RecordKind, Response};
 
 pub mod discover;
 pub mod resolve;
+
+mod runtime;
 
 mod errors;
 mod mdns;
