@@ -92,25 +92,25 @@ impl Discovery {
         let service_name = self.service_name;
         let response_stream = self.mdns_listener.listen().map(StreamResult::Response);
         let sender = self.mdns_sender.clone();
-
-        let interval_stream = async_std::stream::interval(self.send_request_interval)
-            // I don't like the double clone, I can't find a prettier way to do this
-            .map(move |_| {
+        let mut sender2 = sender.clone();
+        async_std::task::spawn(async move {
+            let _ = sender2.send_request().await;
+        });
+        let interval_stream =
+            async_std::stream::interval(self.send_request_interval).then(move |_| {
                 let mut sender = sender.clone();
-                async_std::task::spawn(async move {
+                async move {
                     let _ = sender.send_request().await;
-                });
-                StreamResult::Interval
+                    StreamResult::Interval
+                }
             });
 
         let stream = select(response_stream, interval_stream);
         stream
-            .filter_map(|stream_result| {
-                async {
-                    match stream_result {
-                        StreamResult::Interval => None,
-                        StreamResult::Response(res) => Some(res),
-                    }
+            .filter_map(|stream_result| async {
+                match stream_result {
+                    StreamResult::Interval => None,
+                    StreamResult::Response(res) => Some(res),
                 }
             })
             .filter(move |res| {
