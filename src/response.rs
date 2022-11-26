@@ -7,6 +7,7 @@ pub struct Response {
     pub answers: Vec<Record>,
     pub nameservers: Vec<Record>,
     pub additional: Vec<Record>,
+    pub from_addr: SocketAddr
 }
 
 /// Any type of DNS record.
@@ -42,8 +43,9 @@ pub enum RecordKind {
 }
 
 impl Response {
-    pub fn from_packet(packet: &dns_parser::Packet) -> Self {
+    pub fn from_packet(packet: &dns_parser::Packet, from_addr: SocketAddr) -> Self {
         Response {
+            from_addr,
             answers: packet
                 .answers
                 .iter()
