@@ -22,11 +22,11 @@
 //! }
 //! ```
 
-use crate::{mDNSListener, mdns::mdns_interface_with_loopback, Error, Response};
+use crate::{mDNSListener, Error, Response};
 
 use std::time::Duration;
 
-use crate::mdns::{mDNSSender, mdns_interface};
+use crate::mdns::{mDNSSender, mdns_interface, mdns_interface_with_loopback};
 use futures_core::Stream;
 use futures_util::{future::ready, stream::select, StreamExt};
 use std::net::Ipv4Addr;
