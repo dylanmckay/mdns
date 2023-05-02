@@ -22,7 +22,7 @@
 //! }
 //! ```
 
-use crate::{mDNSListener, Error, Response};
+use crate::{mDNSListener, mdns::mdns_interface_with_loopback, Error, Response};
 
 use std::time::Duration;
 
@@ -57,6 +57,18 @@ where
     interface(service_name, mdns_query_interval, Ipv4Addr::new(0, 0, 0, 0))
 }
 
+/// Gets an iterator over all responses for a given service on all interfaces with loopback
+/// functionality.
+pub fn all_with_loopback<S>(
+    service_name: S,
+    mdns_query_interval: Duration,
+) -> Result<Discovery, Error>
+where
+    S: AsRef<str>,
+{
+    interface_with_loopback(service_name, mdns_query_interval, Ipv4Addr::new(0, 0, 0, 0))
+}
+
 /// Gets an iterator over all responses for a given service on a given interface.
 pub fn interface<S>(
     service_name: S,
@@ -68,6 +80,29 @@ where
 {
     let service_name = service_name.as_ref().to_string();
     let (mdns_listener, mdns_sender) = mdns_interface(service_name.clone(), interface_addr)?;
+
+    Ok(Discovery {
+        service_name,
+        mdns_sender,
+        mdns_listener,
+        ignore_empty: true,
+        send_request_interval: mdns_query_interval,
+    })
+}
+
+/// Gets an iterator over all responses for a given service on a given interface with loopback
+/// functionality.
+pub fn interface_with_loopback<S>(
+    service_name: S,
+    mdns_query_interval: Duration,
+    interface_addr: Ipv4Addr,
+) -> Result<Discovery, Error>
+where
+    S: AsRef<str>,
+{
+    let service_name = service_name.as_ref().to_string();
+    let (mdns_listener, mdns_sender) =
+        mdns_interface_with_loopback(service_name.clone(), interface_addr)?;
 
     Ok(Discovery {
         service_name,
@@ -105,12 +140,10 @@ impl Discovery {
 
         let stream = select(response_stream, interval_stream);
         stream
-            .filter_map(|stream_result| {
-                async {
-                    match stream_result {
-                        StreamResult::Interval => None,
-                        StreamResult::Response(res) => Some(res),
-                    }
+            .filter_map(|stream_result| async {
+                match stream_result {
+                    StreamResult::Interval => None,
+                    StreamResult::Response(res) => Some(res),
                 }
             })
             .filter(move |res| {

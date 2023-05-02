@@ -2,10 +2,10 @@ use crate::{Error, Response};
 
 use std::{io, net::Ipv4Addr};
 
+use async_std::net::UdpSocket;
 use async_stream::try_stream;
 use futures_core::Stream;
 use std::sync::Arc;
-use async_std::net::UdpSocket;
 
 #[cfg(not(target_os = "windows"))]
 use net2::unix::UnixUdpBuilderExt;
@@ -15,13 +15,14 @@ use std::net::SocketAddr;
 const MULTICAST_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 251);
 const MULTICAST_PORT: u16 = 5353;
 
-pub fn mdns_interface(
+fn mdns_interface_inner(
     service_name: String,
     interface_addr: Ipv4Addr,
+    with_loopback: bool,
 ) -> Result<(mDNSListener, mDNSSender), Error> {
     let socket = create_socket()?;
 
-    socket.set_multicast_loop_v4(false)?;
+    socket.set_multicast_loop_v4(with_loopback)?;
     socket.join_multicast_v4(&MULTICAST_ADDR, &interface_addr)?;
 
     let socket = Arc::new(UdpSocket::from(socket));
@@ -29,9 +30,29 @@ pub fn mdns_interface(
     let recv_buffer = vec![0; 4096];
 
     Ok((
-        mDNSListener { recv: socket.clone(), recv_buffer },
-        mDNSSender { service_name, send: socket },
+        mDNSListener {
+            recv: socket.clone(),
+            recv_buffer,
+        },
+        mDNSSender {
+            service_name,
+            send: socket,
+        },
     ))
+}
+
+pub fn mdns_interface(
+    service_name: String,
+    interface_addr: Ipv4Addr,
+) -> Result<(mDNSListener, mDNSSender), Error> {
+    mdns_interface_inner(service_name, interface_addr, false)
+}
+
+pub fn mdns_interface_with_loopback(
+    service_name: String,
+    interface_addr: Ipv4Addr,
+) -> Result<(mDNSListener, mDNSSender), Error> {
+    mdns_interface_inner(service_name, interface_addr, true)
 }
 
 const ADDR_ANY: Ipv4Addr = Ipv4Addr::new(0, 0, 0, 0);
@@ -54,7 +75,7 @@ fn create_socket() -> io::Result<std::net::UdpSocket> {
 /// An mDNS sender on a specific interface.
 #[derive(Debug, Clone)]
 #[allow(non_camel_case_types)]
-pub struct mDNSSender<> {
+pub struct mDNSSender {
     service_name: String,
     send: Arc<UdpSocket>,
 }
