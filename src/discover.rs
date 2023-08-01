@@ -78,6 +78,12 @@ where
     })
 }
 
+/// Returns a stream that produces an Item with a delay of `duration`.
+/// In contrast to async_std's internal, the first item is created **instantly**.
+fn instant_interval(duration: Duration) -> impl Stream<Item = ()> {
+    async_std::stream::once(()).chain(async_std::stream::interval(duration))
+}
+
 impl Discovery {
     /// Sets whether or not we should ignore empty responses.
     ///
@@ -93,7 +99,8 @@ impl Discovery {
         let response_stream = self.mdns_listener.listen().map(StreamResult::Response);
         let sender = self.mdns_sender.clone();
 
-        let interval_stream = async_std::stream::interval(self.send_request_interval)
+        
+        let interval_stream = instant_interval(self.send_request_interval)
             // I don't like the double clone, I can't find a prettier way to do this
             .map(move |_| {
                 let mut sender = sender.clone();
