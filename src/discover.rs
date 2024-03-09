@@ -45,6 +45,13 @@ pub struct Discovery {
     /// Whether we should ignore empty responses.
     ignore_empty: bool,
 
+    /// Whether to send a query request as soon as the listener starts.
+    ///
+    /// Otherwise, wait for `send_request_interval` before the first query.
+    ///
+    /// Defaults to `false`.
+    initial_send: bool,
+
     /// The interval we should send mDNS queries.
     send_request_interval: Duration,
 }
@@ -74,6 +81,7 @@ where
         mdns_sender,
         mdns_listener,
         ignore_empty: true,
+        initial_send: false,
         send_request_interval: mdns_query_interval,
     })
 }
@@ -87,13 +95,29 @@ impl Discovery {
         self
     }
 
+    /// Sets whether to send a query request as soon as the listener starts.
+    ///
+    /// Otherwise, wait for `send_request_interval` before the first query.
+    ///
+    /// Defaults to `false`.
+    pub fn initial_send(mut self, value: bool) -> Self {
+        self.initial_send = value;
+        self
+    }
+
     pub fn listen(self) -> impl Stream<Item = Result<Response, Error>> {
         let ignore_empty = self.ignore_empty;
+        let initial_send = self.initial_send;
         let service_name = self.service_name;
         let response_stream = self.mdns_listener.listen().map(StreamResult::Response);
         let sender = self.mdns_sender.clone();
 
-        let interval_stream = async_std::stream::interval(self.send_request_interval)
+        let initial_interval_iter = std::iter::repeat(())
+                          .take(if initial_send { 1 } else { 0 });
+        let initial_interval_stream = async_std::stream::from_iter(initial_interval_iter);
+
+        let interval_stream = initial_interval_stream
+            .chain(async_std::stream::interval(self.send_request_interval))
             // I don't like the double clone, I can't find a prettier way to do this
             .map(move |_| {
                 let mut sender = sender.clone();
